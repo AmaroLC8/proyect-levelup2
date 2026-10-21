@@ -11,6 +11,9 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],
+      // Mide todo el código fuente, no solo los archivos que importan los tests
+      include: ['src/**/*.{js,jsx}'],
+      exclude: ['src/test/**', 'src/main.jsx'],
     },
   },
 })
