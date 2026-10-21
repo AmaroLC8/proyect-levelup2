@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Level-Up Gamer - E-Commerce Frontend (Evaluación Parcial 2) 🎮
 
 Este proyecto corresponde a la **Evaluación Parcial N° 2** de la asignatura **Desarrollo Fullstack II (DSY1104)** en Duoc UC. Consiste en la evolución y migración del sitio web de la Evaluación 1 hacia una **Single Page Application (SPA)** construida con **React**, implementando componentización modular, persistencia de datos local mediante operaciones CRUD, diseño responsivo con **Bootstrap** y un banco de **10 pruebas unitarias** ejecutadas bajo entorno virtual con reporte de cobertura.
@@ -14,9 +13,9 @@ Este proyecto corresponde a la **Evaluación Parcial N° 2** de la asignatura **
 
 ## 🚀 Tecnologías y Herramientas
 
-* **Core:** React 18 / 19
+* **Core:** React 19
 * **Tooling / Bundler:** Vite
-* **Navegación:** React Router DOM v6
+* **Navegación:** React Router DOM v7
 * **Diseño y Maquetación:** Bootstrap 5, Bootstrap Icons, CSS3 personalizado
 * **Suite de Testing:** Vitest, Jasmine Syntax, React Testing Library, JSDOM
 * **Cobertura de Código:** @vitest/coverage-v8
@@ -28,11 +27,10 @@ Este proyecto corresponde a la **Evaluación Parcial N° 2** de la asignatura **
 El código fuente sigue el principio de responsabilidad única (*Single Responsibility*), separando vistas, componentes reutilizables, lógica de negocio y pruebas:
 
 ```text
-levelup-gamer/
-├── public/
-│   └── ps5.mp4                 # Video hero en autoplay loop
+proyect-levelup2/
+├── public/                     # Íconos y favicon
 ├── src/
-│   ├── assets/                 # Recursos multimedia estáticos locales
+│   ├── assets/                 # Imágenes de productos y video hero (ps5.mp4)
 │   ├── components/
 │   │   ├── Navbar.jsx          # Barra de navegación SPA reactiva al carrito
 │   │   └── ProductCard.jsx     # Tarjeta de producto modular (Props & Events)
@@ -65,12 +63,12 @@ levelup-gamer/
 
 ## 💻 Instrucciones de Instalación y Ejecución Local
 
-Para levantar el proyecto en el taller o entorno local, se requiere **Node.js** (versión 18 o superior):
+Para levantar el proyecto en el taller o entorno local, se requiere **Node.js** (versión 20 o superior):
 
 ### 1. Clonar el repositorio
 ```bash
-git clone [https://github.com/AmaroLC8/TU-NUEVO-REPO.git](https://github.com/AmaroLC8/TU-NUEVO-REPO.git)
-cd levelup-gamer
+git clone https://github.com/AmaroLC8/proyect-levelup2.git
+cd proyect-levelup2
 ```
 
 ### 2. Instalar las dependencias
@@ -115,6 +113,3 @@ El reporte HTML interactivo se compilará en la carpeta `coverage/index.html`.
 8. **Manejo de Estado (State):** Actualiza el valor de los inputs en el formulario de Checkout.
 9. **Validación de Formularios:** Muestra aviso de error si se intenta pagar con campos vacíos.
 10. **Lógica de Administración:** Verifica la carga de métricas y stock crítico en el Dashboard.
-=======
-# proyect-levelup2
->>>>>>> 16369f2c7048ced417142fe0ae18790cb2ea30ac
