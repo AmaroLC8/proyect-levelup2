@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Level-Up Gamer - E-Commerce Frontend (Evaluación Parcial 2) 🎮
 
 Este proyecto corresponde a la **Evaluación Parcial N° 2** de la asignatura **Desarrollo Fullstack II (DSY1104)** en Duoc UC. Consiste en la evolución y migración del sitio web de la Evaluación 1 hacia una **Single Page Application (SPA)** construida con **React**, implementando componentización modular, persistencia de datos local mediante operaciones CRUD, diseño responsivo con **Bootstrap** y un banco de **10 pruebas unitarias** ejecutadas bajo entorno virtual con reporte de cobertura.
@@ -114,3 +115,6 @@ El reporte HTML interactivo se compilará en la carpeta `coverage/index.html`.
 8. **Manejo de Estado (State):** Actualiza el valor de los inputs en el formulario de Checkout.
 9. **Validación de Formularios:** Muestra aviso de error si se intenta pagar con campos vacíos.
 10. **Lógica de Administración:** Verifica la carga de métricas y stock crítico en el Dashboard.
+=======
+# proyect-levelup2
+>>>>>>> 16369f2c7048ced417142fe0ae18790cb2ea30ac
