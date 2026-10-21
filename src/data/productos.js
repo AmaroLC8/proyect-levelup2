@@ -19,6 +19,7 @@ const PRODUCTOS_INICIALES = [
     nombre: "Silla Gamer Ergonómica Pro",
     categoria: "Sillas",
     precio: 159990,
+    precioOferta: 129990,
     stock: 4,
     stockCritico: 5,
     imagen: sillaImg,
@@ -29,6 +30,7 @@ const PRODUCTOS_INICIALES = [
     nombre: "Catan El Juego",
     categoria: "Juegos de Mesa",
     precio: 34990,
+    precioOferta: 27990,
     stock: 10,
     stockCritico: 3,
     imagen: catanImg,
@@ -39,6 +41,7 @@ const PRODUCTOS_INICIALES = [
     nombre: "Teclado Mecánico RGB Switch Blue",
     categoria: "Periféricos",
     precio: 45990,
+    precioOferta: 34990,
     stock: 15,
     stockCritico: 5,
     imagen: "https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=500&auto=format&fit=crop",
@@ -67,6 +70,15 @@ const inicializarStorage = () => {
   return JSON.parse(guardados);
 };
 
+// Convierte a número los campos que llegan como texto desde los formularios
+const normalizarProducto = (producto) => ({
+  ...producto,
+  precio: Number(producto.precio),
+  stock: Number(producto.stock),
+  stockCritico: Number(producto.stockCritico || 5),
+  precioOferta: producto.precioOferta ? Number(producto.precioOferta) : null,
+});
+
 export const obtenerProductos = () => inicializarStorage();
 
 export const obtenerProductoPorId = (id) => {
@@ -77,11 +89,8 @@ export const obtenerProductoPorId = (id) => {
 export const crearProducto = (nuevoProducto) => {
   const productos = obtenerProductos();
   const productoConId = {
-    ...nuevoProducto,
+    ...normalizarProducto(nuevoProducto),
     id: Date.now(),
-    precio: Number(nuevoProducto.precio),
-    stock: Number(nuevoProducto.stock),
-    stockCritico: Number(nuevoProducto.stockCritico || 5)
   };
   const listaActualizada = [...productos, productoConId];
   localStorage.setItem(STORAGE_KEY, JSON.stringify(listaActualizada));
@@ -91,7 +100,7 @@ export const crearProducto = (nuevoProducto) => {
 export const actualizarProducto = (id, datosActualizados) => {
   const productos = obtenerProductos();
   const listaActualizada = productos.map((p) =>
-    p.id === Number(id) ? { ...p, ...datosActualizados, id: Number(id) } : p
+    p.id === Number(id) ? { ...normalizarProducto({ ...p, ...datosActualizados }), id: Number(id) } : p
   );
   localStorage.setItem(STORAGE_KEY, JSON.stringify(listaActualizada));
   return true;
@@ -108,3 +117,16 @@ export const obtenerProductosCriticos = () => {
   const productos = obtenerProductos();
   return productos.filter((p) => p.stock <= p.stockCritico);
 };
+
+// Un producto está en oferta si tiene precio de oferta y es menor al precio normal
+export const esOferta = (producto) =>
+  Boolean(producto.precioOferta) && producto.precioOferta < producto.precio;
+
+// Precio que paga el cliente: el de oferta si corresponde, si no el normal
+export const obtenerPrecioFinal = (producto) =>
+  esOferta(producto) ? producto.precioOferta : producto.precio;
+
+export const obtenerPorcentajeDescuento = (producto) =>
+  esOferta(producto) ? Math.round((1 - producto.precioOferta / producto.precio) * 100) : 0;
+
+export const obtenerProductosEnOferta = () => obtenerProductos().filter(esOferta);

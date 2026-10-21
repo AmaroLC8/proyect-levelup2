@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { obtenerPrecioFinal } from '../data/productos';
 
 const CartContext = createContext();
 
@@ -22,7 +23,8 @@ export const CartProvider = ({ children }) => {
           item.id === producto.id ? { ...item, cantidad: item.cantidad + 1 } : item
         );
       }
-      return [...prev, { ...producto, cantidad: 1 }];
+      // Se guarda el precio final para que las ofertas se cobren en el carrito
+      return [...prev, { ...producto, precio: obtenerPrecioFinal(producto), cantidad: 1 }];
     });
   };
 

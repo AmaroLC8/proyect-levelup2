@@ -5,6 +5,7 @@ import {
   crearProducto,
   actualizarProducto,
   eliminarProducto,
+  esOferta,
 } from '../../data/productos';
 
 export default function AdminProductos() {
@@ -17,6 +18,7 @@ export default function AdminProductos() {
     nombre: '',
     categoria: 'Consolas',
     precio: '',
+    precioOferta: '',
     stock: '',
     stockCritico: '5',
     imagen: '',
@@ -40,6 +42,7 @@ export default function AdminProductos() {
       nombre: '',
       categoria: 'Consolas',
       precio: '',
+      precioOferta: '',
       stock: '',
       stockCritico: '5',
       imagen: '',
@@ -53,6 +56,11 @@ export default function AdminProductos() {
     e.preventDefault();
     if (!form.nombre.trim() || !form.precio || !form.stock) {
       alert('Nombre, precio y stock son campos obligatorios');
+      return;
+    }
+
+    if (form.precioOferta && Number(form.precioOferta) >= Number(form.precio)) {
+      alert('El precio de oferta debe ser menor al precio normal');
       return;
     }
 
@@ -76,6 +84,7 @@ export default function AdminProductos() {
       nombre: prod.nombre,
       categoria: prod.categoria,
       precio: prod.precio,
+      precioOferta: prod.precioOferta || '',
       stock: prod.stock,
       stockCritico: prod.stockCritico || 5,
       imagen: prod.imagen,
@@ -167,6 +176,18 @@ export default function AdminProductos() {
                 </div>
 
                 <div className="mb-3">
+                  <label className="form-label text-secondary small">Precio oferta ($CLP)</label>
+                  <input
+                    type="number"
+                    name="precioOferta"
+                    className="form-control bg-dark text-light border-secondary"
+                    value={form.precioOferta}
+                    onChange={handleChange}
+                    placeholder="Opcional, déjalo vacío si no está en oferta"
+                  />
+                </div>
+
+                <div className="mb-3">
                   <label className="form-label text-secondary small">URL de Imagen</label>
                   <input
                     type="url"
@@ -236,7 +257,14 @@ export default function AdminProductos() {
                         </td>
                         <td className="fw-bold text-light">{p.nombre}</td>
                         <td>{p.categoria}</td>
-                        <td>${Number(p.precio).toLocaleString('es-CL')}</td>
+                        <td>
+                          ${Number(p.precio).toLocaleString('es-CL')}
+                          {esOferta(p) && (
+                            <div className="small text-warning">
+                              Oferta: ${Number(p.precioOferta).toLocaleString('es-CL')}
+                            </div>
+                          )}
+                        </td>
                         <td>
                           <span className={`badge ${p.stock <= (p.stockCritico || 5) ? 'bg-danger' : 'bg-success'}`}>
                             {p.stock}

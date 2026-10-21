@@ -45,6 +45,11 @@ export default function Navbar() {
               </NavLink>
             </li>
             <li className="nav-item">
+              <NavLink className="nav-link" to="/ofertas">
+                <i className="bi bi-lightning-charge-fill text-warning me-1"></i>Ofertas
+              </NavLink>
+            </li>
+            <li className="nav-item">
               <NavLink className="nav-link" to="/admin">
                 <i className="bi bi-shield-lock me-1"></i>Admin
               </NavLink>

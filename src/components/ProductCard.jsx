@@ -1,14 +1,14 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
+import { esOferta, obtenerPrecioFinal, obtenerPorcentajeDescuento } from '../data/productos';
 
 export default function ProductCard({ producto }) {
   const { agregarAlCarrito } = useCart();
+  const enOferta = esOferta(producto);
 
-  const precioFormateado = new Intl.NumberFormat('es-CL', {
-    style: 'currency',
-    currency: 'CLP',
-  }).format(producto.precio);
+  const formatearDinero = (monto) =>
+    new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(monto);
 
   return (
     <div
@@ -33,8 +33,14 @@ export default function ProductCard({ producto }) {
           justifyContent: 'center',
           padding: '16px',
           borderBottom: '1px solid #22293a',
+          position: 'relative',
         }}
       >
+        {enOferta && (
+          <span className="badge bg-danger position-absolute top-0 start-0 m-2 fs-6">
+            -{obtenerPorcentajeDescuento(producto)}%
+          </span>
+        )}
         <img
           src={producto.imagen}
           alt={producto.nombre}
@@ -94,9 +100,16 @@ export default function ProductCard({ producto }) {
           className="d-flex justify-content-between align-items-center pt-3 mt-auto"
           style={{ borderTop: '1px solid #22293a' }}
         >
-          <span className="fs-5 fw-bold" style={{ color: '#ffffff' }}>
-            {precioFormateado}
-          </span>
+          <div className="d-flex flex-column">
+            {enOferta && (
+              <small className="text-decoration-line-through" style={{ color: '#94a3b8' }}>
+                {formatearDinero(producto.precio)}
+              </small>
+            )}
+            <span className="fs-5 fw-bold" style={{ color: enOferta ? '#f87171' : '#ffffff' }}>
+              {formatearDinero(obtenerPrecioFinal(producto))}
+            </span>
+          </div>
           <button
             className="btn btn-sm px-3 py-2 fw-semibold d-flex align-items-center gap-2"
             style={{

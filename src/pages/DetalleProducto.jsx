@@ -1,6 +1,12 @@
 import React from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { obtenerProductoPorId, obtenerProductos } from '../data/productos';
+import {
+  obtenerProductoPorId,
+  obtenerProductos,
+  esOferta,
+  obtenerPrecioFinal,
+  obtenerPorcentajeDescuento,
+} from '../data/productos';
 import { useCart } from '../context/CartContext';
 import ProductCard from '../components/ProductCard';
 
@@ -94,8 +100,19 @@ export default function DetalleProducto() {
             {producto.descripcion}
           </p>
 
-          <div className="fs-2 fw-bold mb-2" style={{ color: '#ffffff' }}>
-            {formatearDinero(producto.precio)}
+          {esOferta(producto) && (
+            <div className="d-flex align-items-center gap-2 mb-1">
+              <span className="text-decoration-line-through" style={{ color: '#94a3b8' }}>
+                {formatearDinero(producto.precio)}
+              </span>
+              <span className="badge bg-danger">-{obtenerPorcentajeDescuento(producto)}%</span>
+            </div>
+          )}
+          <div
+            className="fs-2 fw-bold mb-2"
+            style={{ color: esOferta(producto) ? '#f87171' : '#ffffff' }}
+          >
+            {formatearDinero(obtenerPrecioFinal(producto))}
           </div>
 
           <p className={`small mb-4 ${sinStock ? 'text-danger' : 'text-success'}`}>
