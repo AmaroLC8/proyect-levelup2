@@ -113,6 +113,16 @@ export const eliminarProducto = (id) => {
   return true;
 };
 
+// Resta del inventario las unidades vendidas en una orden pagada
+export const descontarStock = (items) => {
+  const productos = obtenerProductos();
+  const listaActualizada = productos.map((p) => {
+    const vendido = items.find((item) => item.id === p.id);
+    return vendido ? { ...p, stock: Math.max(0, p.stock - vendido.cantidad) } : p;
+  });
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(listaActualizada));
+};
+
 export const obtenerProductosCriticos = () => {
   const productos = obtenerProductos();
   return productos.filter((p) => p.stock <= p.stockCritico);

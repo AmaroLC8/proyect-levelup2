@@ -1,62 +1,90 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
+import { useAuth } from '../context/AuthContext';
+import { crearOrden, obtenerUltimaOrden } from '../data/ordenes';
+import { descontarStock } from '../data/productos';
+import { obtenerRegiones, obtenerComunas } from '../data/regiones';
+import { esCorreoValido } from '../utils/validaciones';
+import { formatearDinero } from '../utils/formato';
+
+const REGION_POR_DEFECTO = 'Región Metropolitana de Santiago';
+
+// Datos iniciales del formulario: los de la orden rechazada si se reintenta el pago,
+// los del usuario si inició sesión (RF11), o vacíos para un visitante
+const obtenerDatosIniciales = (usuario, reintentar) => {
+  const ultimaOrden = obtenerUltimaOrden();
+  if (reintentar && ultimaOrden?.estado === 'rechazada') {
+    return { ...ultimaOrden.cliente };
+  }
+  return {
+    nombre: usuario?.nombre ?? '',
+    apellidos: usuario?.apellidos ?? '',
+    correo: usuario?.correo ?? '',
+    calle: '',
+    depto: '',
+    region: REGION_POR_DEFECTO,
+    comuna: obtenerComunas(REGION_POR_DEFECTO)[0],
+    indicaciones: '',
+  };
+};
 
 export default function Checkout() {
   const navigate = useNavigate();
-  const { carrito, totalMonto, vaciarCarrito } = useCart();
+  const location = useLocation();
+  const { carrito, subtotal, descuento, totalMonto, vaciarCarrito } = useCart();
+  const { usuario } = useAuth();
 
   // Estados del formulario de despacho
-  const [formData, setFormData] = useState({
-    nombre: '',
-    apellidos: '',
-    correo: '',
-    calle: '',
-    depto: '',
-    region: 'Región Metropolitana de Santiago',
-    comuna: 'Cerrillos',
-    indicaciones: '',
-  });
+  const [formData, setFormData] = useState(() =>
+    obtenerDatosIniciales(usuario, location.state?.reintentar)
+  );
 
   const [error, setError] = useState('');
-
-  const formatearDinero = (monto) =>
-    new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(monto);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  // Al cambiar de región se selecciona la primera comuna de esa región
+  const handleCambioRegion = (e) => {
+    const region = e.target.value;
+    setFormData({ ...formData, region, comuna: obtenerComunas(region)[0] });
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
 
-    // Validación básica de campos requeridos
+    // Validación de campos requeridos
     if (!formData.nombre.trim() || !formData.apellidos.trim() || !formData.correo.trim() || !formData.calle.trim()) {
       setError('Por favor completa todos los campos obligatorios (*)');
       return;
     }
 
-    if (!formData.correo.includes('@')) {
+    if (!esCorreoValido(formData.correo)) {
       setError('Ingresa un correo electrónico válido');
       return;
     }
 
     setError('');
 
-    // Guardamos los datos de la última orden simulada
-    const orden = {
-      numeroOrden: '20240705',
-      fecha: new Date().toLocaleDateString('es-CL'),
-      cliente: formData,
-      items: carrito,
-      total: totalMonto,
-    };
-    localStorage.setItem('levelup_ultima_orden', JSON.stringify(orden));
+    // Si el correo contiene "error" (ej: error@test.com) simulamos un pago rechazado
+    const pagoRechazado = formData.correo.toLowerCase().includes('error');
 
-    // Si el usuario escribe "error@error.com" o un monto 0, simulamos fallo para probar ambas vistas de la pauta
-    if (formData.correo.toLowerCase().includes('error')) {
+    crearOrden({
+      estado: pagoRechazado ? 'rechazada' : 'pagada',
+      usuarioId: usuario?.id ?? null,
+      cliente: formData,
+      items: carrito.map(({ id, nombre, precio, cantidad, imagen }) => ({ id, nombre, precio, cantidad, imagen })),
+      subtotal,
+      descuento,
+      total: totalMonto,
+    });
+
+    if (pagoRechazado) {
       navigate('/pago-error');
     } else {
+      descontarStock(carrito);
       vaciarCarrito();
       navigate('/pago-exitoso');
     }
@@ -106,8 +134,22 @@ export default function Checkout() {
                   </tr>
                 ))}
               </tbody>
+              {descuento > 0 && (
+                <tfoot>
+                  <tr>
+                    <td colSpan="3" className="text-end text-warning">Descuento Duoc (20%):</td>
+                    <td className="text-warning">-{formatearDinero(descuento)}</td>
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
+
+          {usuario && !location.state?.reintentar && (
+            <div className="alert alert-info py-2 small">
+              <i className="bi bi-person-check me-2"></i>Completamos tus datos con la información de tu cuenta.
+            </div>
+          )}
 
           {error && <div className="alert alert-danger py-2">{error}</div>}
 
@@ -180,30 +222,29 @@ export default function Checkout() {
                 />
               </div>
               <div className="col-md-6">
-                <label className="form-label text-secondary small">Región</label>
+                <label className="form-label text-secondary small">Región *</label>
                 <select
                   name="region"
                   className="form-select bg-dark text-light border-secondary"
                   value={formData.region}
-                  onChange={handleChange}
+                  onChange={handleCambioRegion}
                 >
-                  <option value="Región Metropolitana de Santiago">Región Metropolitana de Santiago</option>
-                  <option value="Valparaíso">Valparaíso</option>
-                  <option value="Biobío">Biobío</option>
+                  {obtenerRegiones().map((region) => (
+                    <option key={region} value={region}>{region}</option>
+                  ))}
                 </select>
               </div>
               <div className="col-md-6">
-                <label className="form-label text-secondary small">Comuna</label>
+                <label className="form-label text-secondary small">Comuna *</label>
                 <select
                   name="comuna"
                   className="form-select bg-dark text-light border-secondary"
                   value={formData.comuna}
                   onChange={handleChange}
                 >
-                  <option value="Cerrillos">Cerrillos</option>
-                  <option value="Providencia">Providencia</option>
-                  <option value="Santiago Centro">Santiago Centro</option>
-                  <option value="Maipú">Maipú</option>
+                  {obtenerComunas(formData.region).map((comuna) => (
+                    <option key={comuna} value={comuna}>{comuna}</option>
+                  ))}
                 </select>
               </div>
               <div className="col-12">

@@ -2,6 +2,7 @@ import React from 'react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
+import { AuthProvider } from '../context/AuthContext';
 
 // Componentes a testear
 import ProductCard from '../components/ProductCard';
@@ -166,7 +167,9 @@ describe('Suite de Pruebas Unitarias - Level-Up Gamer (10/10 Requeridas)', () =>
 
     render(
       <BrowserRouter>
-        <Checkout />
+        <AuthProvider>
+          <Checkout />
+        </AuthProvider>
       </BrowserRouter>
     );
 
@@ -182,7 +185,9 @@ describe('Suite de Pruebas Unitarias - Level-Up Gamer (10/10 Requeridas)', () =>
 
     render(
       <BrowserRouter>
-        <Checkout />
+        <AuthProvider>
+          <Checkout />
+        </AuthProvider>
       </BrowserRouter>
     );
 
