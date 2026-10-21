@@ -50,6 +50,7 @@ export default function ProductCard({ producto }) {
       <div className="p-4 d-flex flex-column flex-grow-1">
         <div className="d-flex justify-content-between align-items-center mb-2">
           <span
+            className="badge"
             style={{
               backgroundColor: 'rgba(14, 165, 233, 0.15)',
               color: '#38bdf8',
