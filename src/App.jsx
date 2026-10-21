@@ -12,6 +12,10 @@ import Categorias from './pages/Categorias';
 import Ofertas from './pages/Ofertas';
 import Login from './pages/Login';
 import Registro from './pages/Registro';
+import Nosotros from './pages/Nosotros';
+import Blog from './pages/Blog';
+import DetalleBlog from './pages/DetalleBlog';
+import Contacto from './pages/Contacto';
 import Carrito from './pages/Carrito';
 import Checkout from './pages/Checkout';
 import PagoExitoso from './pages/PagoExitoso';
@@ -39,6 +43,10 @@ export default function App() {
                 <Route path="/ofertas" element={<Ofertas />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/registro" element={<Registro />} />
+                <Route path="/nosotros" element={<Nosotros />} />
+                <Route path="/blog" element={<Blog />} />
+                <Route path="/blog/:id" element={<DetalleBlog />} />
+                <Route path="/contacto" element={<Contacto />} />
                 <Route path="/carrito" element={<Carrito />} />
                 <Route path="/checkout" element={<Checkout />} />
                 <Route path="/pago-exitoso" element={<PagoExitoso />} />

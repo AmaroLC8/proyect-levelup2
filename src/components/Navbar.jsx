@@ -57,6 +57,21 @@ export default function Navbar() {
                 <i className="bi bi-lightning-charge-fill text-warning me-1"></i>Ofertas
               </NavLink>
             </li>
+            <li className="nav-item">
+              <NavLink className="nav-link" to="/nosotros">
+                Nosotros
+              </NavLink>
+            </li>
+            <li className="nav-item">
+              <NavLink className="nav-link" to="/blog">
+                Blog
+              </NavLink>
+            </li>
+            <li className="nav-item">
+              <NavLink className="nav-link" to="/contacto">
+                Contacto
+              </NavLink>
+            </li>
             {esAdmin && (
               <li className="nav-item">
                 <NavLink className="nav-link" to="/admin">
