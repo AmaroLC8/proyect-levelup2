@@ -1,9 +1,14 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { obtenerPrecioFinal } from '../data/productos';
+import { useAuth } from './AuthContext';
 
 const CartContext = createContext();
 
+// Descuento de por vida para usuarios registrados con correo Duoc (RF1 y RF3)
+export const PORCENTAJE_DESCUENTO_DUOC = 20;
+
 export const CartProvider = ({ children }) => {
+  const { usuario } = useAuth();
   const [carrito, setCarrito] = useState(() => {
     const guardado = localStorage.getItem('levelup_cart');
     return guardado ? JSON.parse(guardado) : [];
@@ -53,9 +58,11 @@ export const CartProvider = ({ children }) => {
     setCarrito([]);
   };
 
-  // Cálculos automáticos de cantidad total y monto total
+  // Cálculos automáticos: cantidad, subtotal, descuento Duoc y total a pagar
   const totalItems = carrito.reduce((acc, item) => acc + item.cantidad, 0);
-  const totalMonto = carrito.reduce((acc, item) => acc + item.precio * item.cantidad, 0);
+  const subtotal = carrito.reduce((acc, item) => acc + item.precio * item.cantidad, 0);
+  const descuento = usuario?.descuentoDuoc ? Math.round((subtotal * PORCENTAJE_DESCUENTO_DUOC) / 100) : 0;
+  const totalMonto = subtotal - descuento;
 
   return (
     <CartContext.Provider
@@ -66,6 +73,8 @@ export const CartProvider = ({ children }) => {
         eliminarDelCarrito,
         vaciarCarrito,
         totalItems,
+        subtotal,
+        descuento,
         totalMonto,
       }}
     >

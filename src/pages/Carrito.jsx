@@ -1,12 +1,10 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { useCart } from '../context/CartContext';
+import { useCart, PORCENTAJE_DESCUENTO_DUOC } from '../context/CartContext';
+import { formatearDinero } from '../utils/formato';
 
 export default function Carrito() {
-  const { carrito, modificarCantidad, eliminarDelCarrito, vaciarCarrito, totalMonto } = useCart();
-
-  const formatearDinero = (monto) =>
-    new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(monto);
+  const { carrito, modificarCantidad, eliminarDelCarrito, vaciarCarrito, subtotal, descuento, totalMonto } = useCart();
 
   return (
     <div className="container my-5">
@@ -100,6 +98,20 @@ export default function Carrito() {
                 ))}
               </tbody>
               <tfoot>
+                {descuento > 0 && (
+                  <>
+                    <tr>
+                      <td colSpan="4" className="text-end text-secondary">Subtotal:</td>
+                      <td colSpan="2" className="text-light">{formatearDinero(subtotal)}</td>
+                    </tr>
+                    <tr>
+                      <td colSpan="4" className="text-end text-warning">
+                        <i className="bi bi-mortarboard-fill me-1"></i>Descuento Duoc ({PORCENTAJE_DESCUENTO_DUOC}%):
+                      </td>
+                      <td colSpan="2" className="text-warning fw-bold">-{formatearDinero(descuento)}</td>
+                    </tr>
+                  </>
+                )}
                 <tr>
                   <td colSpan="4" className="text-end fs-5 fw-bold text-light py-3">
                     Total:
