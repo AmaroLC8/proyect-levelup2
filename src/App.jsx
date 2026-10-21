@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { CartProvider } from './context/CartContext';
+import { AuthProvider } from './context/AuthContext';
 import Navbar from './components/Navbar';
 
 // Páginas de la tienda
@@ -9,6 +10,8 @@ import Productos from './pages/Productos';
 import DetalleProducto from './pages/DetalleProducto';
 import Categorias from './pages/Categorias';
 import Ofertas from './pages/Ofertas';
+import Login from './pages/Login';
+import Registro from './pages/Registro';
 import Carrito from './pages/Carrito';
 import Checkout from './pages/Checkout';
 import PagoExitoso from './pages/PagoExitoso';
@@ -20,38 +23,42 @@ import AdminProductos from './pages/admin/AdminProductos';
 
 export default function App() {
   return (
-    <CartProvider>
-      <BrowserRouter>
-        <div className="d-flex flex-column min-vh-100">
-          <Navbar />
-          
-          <main className="flex-grow-1">
-            <Routes>
-              {/* Rutas de la Tienda Pública */}
-              <Route path="/" element={<Home />} />
-              <Route path="/productos" element={<Productos />} />
-              <Route path="/producto/:id" element={<DetalleProducto />} />
-              <Route path="/categorias" element={<Categorias />} />
-              <Route path="/ofertas" element={<Ofertas />} />
-              <Route path="/carrito" element={<Carrito />} />
-              <Route path="/checkout" element={<Checkout />} />
-              <Route path="/pago-exitoso" element={<PagoExitoso />} />
-              <Route path="/pago-error" element={<PagoError />} />
+    <AuthProvider>
+      <CartProvider>
+        <BrowserRouter>
+          <div className="d-flex flex-column min-vh-100">
+            <Navbar />
 
-              {/* Rutas del Panel Administrador */}
-              <Route path="/admin" element={<AdminDashboard />} />
-              <Route path="/admin/productos" element={<AdminProductos />} />
-            </Routes>
-          </main>
+            <main className="flex-grow-1">
+              <Routes>
+                {/* Rutas de la Tienda Pública */}
+                <Route path="/" element={<Home />} />
+                <Route path="/productos" element={<Productos />} />
+                <Route path="/producto/:id" element={<DetalleProducto />} />
+                <Route path="/categorias" element={<Categorias />} />
+                <Route path="/ofertas" element={<Ofertas />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/registro" element={<Registro />} />
+                <Route path="/carrito" element={<Carrito />} />
+                <Route path="/checkout" element={<Checkout />} />
+                <Route path="/pago-exitoso" element={<PagoExitoso />} />
+                <Route path="/pago-error" element={<PagoError />} />
 
-          <footer className="py-4 text-center text-secondary border-top border-secondary mt-5" style={{ backgroundColor: '#0b0d14' }}>
-            <div className="container">
-              <p className="mb-1 text-light fw-bold">LEVEL-UP GAMER © 2026 - Duoc UC</p>
-              <small>Desarrollo Fullstack II - Evaluación Parcial N° 2</small>
-            </div>
-          </footer>
-        </div>
-      </BrowserRouter>
-    </CartProvider>
+                {/* Rutas del Panel Administrador */}
+                <Route path="/admin" element={<AdminDashboard />} />
+                <Route path="/admin/productos" element={<AdminProductos />} />
+              </Routes>
+            </main>
+
+            <footer className="py-4 text-center text-secondary border-top border-secondary mt-5" style={{ backgroundColor: '#0b0d14' }}>
+              <div className="container">
+                <p className="mb-1 text-light fw-bold">LEVEL-UP GAMER © 2026 - Duoc UC</p>
+                <small>Desarrollo Fullstack II - Evaluación Parcial N° 2</small>
+              </div>
+            </footer>
+          </div>
+        </BrowserRouter>
+      </CartProvider>
+    </AuthProvider>
   );
 }
