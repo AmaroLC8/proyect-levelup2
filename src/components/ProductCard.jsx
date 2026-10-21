@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 
 export default function ProductCard({ producto }) {
@@ -20,8 +21,9 @@ export default function ProductCard({ producto }) {
         boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
       }}
     >
-      {/* Caja de imagen con tamaño fijo igual para todos los productos */}
-      <div
+      {/* Caja de imagen con tamaño fijo igual para todos los productos (enlaza al detalle) */}
+      <Link
+        to={`/producto/${producto.id}`}
         style={{
           width: '100%',
           height: '220px',
@@ -44,7 +46,7 @@ export default function ProductCard({ producto }) {
             objectFit: 'contain',
           }}
         />
-      </div>
+      </Link>
 
       {/* Cuerpo de la tarjeta */}
       <div className="p-4 d-flex flex-column flex-grow-1">
@@ -70,9 +72,15 @@ export default function ProductCard({ producto }) {
 
         <h5
           className="fw-bold mb-2"
-          style={{ color: '#ffffff', fontSize: '1.1rem', minHeight: '2.6rem' }}
+          style={{ fontSize: '1.1rem', minHeight: '2.6rem' }}
         >
-          {producto.nombre}
+          <Link
+            to={`/producto/${producto.id}`}
+            className="text-decoration-none"
+            style={{ color: '#ffffff' }}
+          >
+            {producto.nombre}
+          </Link>
         </h5>
 
         <p

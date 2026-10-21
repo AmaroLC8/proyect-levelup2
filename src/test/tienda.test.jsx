@@ -54,7 +54,11 @@ describe('Suite de Pruebas Unitarias - Level-Up Gamer (10/10 Requeridas)', () =>
   // ==========================================
 
   it('1. Debe renderizar correctamente la información básica del producto recibida por Props', () => {
-    render(<ProductCard producto={productoMock} />);
+    render(
+      <BrowserRouter>
+        <ProductCard producto={productoMock} />
+      </BrowserRouter>
+    );
 
     // Valida que el nombre del producto aparezca en el DOM
     const titulo = screen.getByText('PlayStation 5 Slim 1TB');
@@ -65,7 +69,11 @@ describe('Suite de Pruebas Unitarias - Level-Up Gamer (10/10 Requeridas)', () =>
   });
 
   it('2. Debe recibir y renderizar la propiedad categoría como una etiqueta (badge)', () => {
-    render(<ProductCard producto={productoMock} />);
+    render(
+      <BrowserRouter>
+        <ProductCard producto={productoMock} />
+      </BrowserRouter>
+    );
 
     const badgeCategoria = screen.getByText('Consolas');
     expect(badgeCategoria).toBeInTheDocument();
@@ -73,7 +81,11 @@ describe('Suite de Pruebas Unitarias - Level-Up Gamer (10/10 Requeridas)', () =>
   });
 
   it('3. Debe renderizar el precio formateado en moneda local chilena (CLP)', () => {
-    render(<ProductCard producto={productoMock} />);
+    render(
+      <BrowserRouter>
+        <ProductCard producto={productoMock} />
+      </BrowserRouter>
+    );
 
     // El precio debe contener el formato de pesos ($)
     const precio = screen.getByText(/\$499\.990/i);
@@ -85,7 +97,11 @@ describe('Suite de Pruebas Unitarias - Level-Up Gamer (10/10 Requeridas)', () =>
   // ==========================================
 
   it('4. Debe ejecutar la función agregarAlCarrito al hacer clic en el botón Añadir (Evento Click)', () => {
-    render(<ProductCard producto={productoMock} />);
+    render(
+      <BrowserRouter>
+        <ProductCard producto={productoMock} />
+      </BrowserRouter>
+    );
 
     const botonAnadir = screen.getByRole('button', { name: /añadir/i });
     fireEvent.click(botonAnadir);
