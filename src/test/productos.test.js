@@ -20,9 +20,19 @@ describe('Pruebas unitarias en data/productos.js (CRUD)', () => {
     localStorage.clear();
   });
 
-  it('carga los 5 productos iniciales y los guarda en localStorage', () => {
-    expect(obtenerProductos()).toHaveLength(5);
-    expect(JSON.parse(localStorage.getItem('levelup_productos'))).toHaveLength(5);
+  it('carga los 15 productos iniciales y los guarda en localStorage', () => {
+    expect(obtenerProductos()).toHaveLength(15);
+    expect(JSON.parse(localStorage.getItem('levelup_productos'))).toHaveLength(15);
+  });
+
+  it('mantiene los id 1 a 5 de los productos originales que usan las órdenes de ejemplo', () => {
+    expect([1, 2, 3, 4, 5].map((id) => obtenerProductoPorId(id).nombre)).toEqual([
+      'PlayStation 5 Slim 1TB',
+      'Silla Gamer Ergonómica Pro',
+      'Catan El Juego',
+      'Teclado Mecánico RGB Switch Blue',
+      'Mouse Gamer 16000 DPI Sensor Óptico',
+    ]);
   });
 
   it('crearProducto asigna id numérico, convierte los números e imagen por defecto', () => {
@@ -55,12 +65,19 @@ describe('Pruebas unitarias en data/productos.js (CRUD)', () => {
     eliminarProducto(3);
 
     expect(obtenerProductoPorId(3)).toBeUndefined();
-    expect(obtenerProductos()).toHaveLength(4);
+    expect(obtenerProductos()).toHaveLength(14);
   });
 
   it('obtenerProductosCriticos devuelve los productos con stock igual o menor a su stock crítico (RF15)', () => {
     const nombres = obtenerProductosCriticos().map((p) => p.nombre);
-    expect(nombres).toEqual(['Silla Gamer Ergonómica Pro', 'Mouse Gamer 16000 DPI Sensor Óptico']);
+    expect(nombres).toEqual([
+      'Nintendo Switch OLED Mario Edition',
+      'Silla Gamer Ergonómica Pro',
+      'Carcassonne Edición Plus',
+      'Mouse Gamer 16000 DPI Sensor Óptico',
+      'Notebook Gamer i7 RTX 4070 144Hz',
+    ]);
+    expect(obtenerProductosCriticos().every((p) => p.stock <= p.stockCritico)).toBe(true);
   });
 
   it('descontarStock resta lo vendido sin bajar de 0', () => {
@@ -84,14 +101,15 @@ describe('Pruebas unitarias en data/productos.js (CRUD)', () => {
     expect(obtenerPrecioFinal(ps5)).toBe(499990);
     expect(esOferta({ precio: 1000, precioOferta: 1500 })).toBe(false);
 
-    expect(obtenerProductosEnOferta()).toHaveLength(3);
+    expect(obtenerProductosEnOferta()).toHaveLength(9);
+    expect(obtenerProductosEnOferta().every(esOferta)).toBe(true);
   });
 
   it('reemplazarCategoriaEnProductos mueve los productos al nuevo nombre de categoría', () => {
-    reemplazarCategoriaEnProductos('Periféricos', 'Accesorios');
+    reemplazarCategoriaEnProductos('Periféricos', 'Gaming Gear');
 
     const categorias = obtenerProductos().map((p) => p.categoria);
     expect(categorias).not.toContain('Periféricos');
-    expect(categorias.filter((c) => c === 'Accesorios')).toHaveLength(2);
+    expect(categorias.filter((c) => c === 'Gaming Gear')).toHaveLength(3); // teclado, mouse y audífonos
   });
 });

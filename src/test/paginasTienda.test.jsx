@@ -4,6 +4,7 @@ import { render, screen, fireEvent, within } from '@testing-library/react';
 import App from '../App';
 import { obtenerOrdenes } from '../data/ordenes';
 import { obtenerProductoPorId } from '../data/productos';
+import { crearCategoria } from '../data/categorias';
 
 // Abre la aplicación completa en la ruta indicada, como lo haría el usuario
 const abrirEn = (ruta) => {
@@ -32,20 +33,22 @@ describe('Pruebas de las vistas de la tienda', () => {
 
     it('el catálogo renderiza todos los productos del conjunto de datos', () => {
       abrirEn('/productos');
-      expect(tarjetasDeProducto()).toHaveLength(5);
+      expect(tarjetasDeProducto()).toHaveLength(15);
     });
 
     it('filtra por texto de búsqueda, categoría y precio máximo (RF2)', () => {
       abrirEn('/productos?buscar=mouse');
-      expect(tarjetasDeProducto()).toHaveLength(1);
+      // "mouse" encuentra el Mouse Gamer y el Mousepad
+      expect(tarjetasDeProducto()).toHaveLength(2);
 
       fireEvent.change(screen.getByPlaceholderText(/buscar producto por nombre/i), { target: { value: '' } });
       fireEvent.change(screen.getByDisplayValue('Todas las Categorías'), { target: { value: 'Periféricos' } });
-      expect(tarjetasDeProducto()).toHaveLength(2);
+      expect(tarjetasDeProducto()).toHaveLength(3);
 
       fireEvent.change(screen.getByPlaceholderText(/precio máximo/i), { target: { value: '30000' } });
-      // Teclado en oferta a $34.990 queda fuera; Mouse a $29.990 queda dentro
+      // Teclado ($34.990) y Audífonos ($49.990) quedan fuera; el Mouse ($29.990) queda dentro
       expect(tarjetasDeProducto()).toHaveLength(1);
+      expect(screen.getByText('Mouse Gamer 16000 DPI Sensor Óptico')).toBeInTheDocument();
     });
 
     it('muestra un mensaje cuando ningún producto cumple los filtros', () => {
@@ -57,6 +60,7 @@ describe('Pruebas de las vistas de la tienda', () => {
 
   describe('Categorías y Ofertas', () => {
     it('cambia los productos al seleccionar otra categoría sin recargar (RF8)', () => {
+      crearCategoria({ nombre: 'Streaming', descripcion: 'Categoría nueva, todavía sin productos' });
       abrirEn('/categorias');
       expect(screen.getByText('PlayStation 5 Slim 1TB')).toBeInTheDocument();
 
@@ -65,13 +69,16 @@ describe('Pruebas de las vistas de la tienda', () => {
       expect(screen.queryByText('PlayStation 5 Slim 1TB')).not.toBeInTheDocument();
 
       fireEvent.click(screen.getByRole('button', { name: /computadores gamer/i }));
+      expect(screen.getByText('PC Gamer RTX 4060 Ryzen 5 16GB')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: /streaming/i }));
       expect(screen.getByText(/aún no hay productos en esta categoría/i)).toBeInTheDocument();
     });
 
     it('ofertas muestra solo productos con descuento, de mayor a menor % (RF9)', () => {
       abrirEn('/ofertas');
       const descuentos = screen.getAllByText(/^-\d+%$/).map((etiqueta) => etiqueta.textContent);
-      expect(descuentos).toEqual(['-24%', '-20%', '-19%']);
+      expect(descuentos).toEqual(['-24%', '-21%', '-20%', '-19%', '-17%', '-17%', '-9%', '-8%', '-6%']);
       expect(screen.queryByText('PlayStation 5 Slim 1TB')).not.toBeInTheDocument();
     });
   });

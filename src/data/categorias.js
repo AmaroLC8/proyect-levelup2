@@ -7,6 +7,7 @@ const CATEGORIAS_INICIALES = [
   { id: 3, nombre: 'Sillas', descripcion: 'Sillas gamer ergonómicas para largas sesiones.', activa: true },
   { id: 4, nombre: 'Juegos de Mesa', descripcion: 'Juegos de estrategia y para compartir.', activa: true },
   { id: 5, nombre: 'Computadores Gamer', descripcion: 'Torres, notebooks y monitores gaming.', activa: true },
+  { id: 6, nombre: 'Accesorios', descripcion: 'Mousepads, soportes y accesorios para tu setup.', activa: true },
 ];
 
 const STORAGE_KEY = 'levelup_categorias';

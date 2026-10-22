@@ -3,6 +3,9 @@ import ps5Img from '../assets/ps5.jpg';
 import catanImg from '../assets/catan.jpg';
 import sillaImg from '../assets/silla.jpg';
 
+// Los id 1 a 5 son los productos originales: las órdenes de ejemplo (ordenes.js) los
+// referencian por id, así que no deben cambiar. Los productos nuevos usan id desde el 6.
+// Cada "categoria" debe existir en data/categorias.js para que el producto se vea en la tienda.
 const PRODUCTOS_INICIALES = [
   // ================= CONSOLAS =================
   {
@@ -16,7 +19,7 @@ const PRODUCTOS_INICIALES = [
     descripcion: "Consola Sony PlayStation 5 con lector de discos y 1TB SSD ultra rápido."
   },
   {
-    id: 2,
+    id: 6,
     nombre: "Nintendo Switch OLED Mario Edition",
     categoria: "Consolas",
     precio: 349990,
@@ -27,7 +30,7 @@ const PRODUCTOS_INICIALES = [
     descripcion: "Pantalla OLED de 7 pulgadas con soporte ajustable y audio optimizado."
   },
   {
-    id: 3,
+    id: 7,
     nombre: "Xbox Series X 1TB Black",
     categoria: "Consolas",
     precio: 529990,
@@ -40,7 +43,7 @@ const PRODUCTOS_INICIALES = [
 
   // ================= SILLAS =================
   {
-    id: 4,
+    id: 2,
     nombre: "Silla Gamer Ergonómica Pro",
     categoria: "Sillas",
     precio: 159990,
@@ -51,7 +54,7 @@ const PRODUCTOS_INICIALES = [
     descripcion: "Silla gamer reclinable 180° con soporte lumbar y apoya brazos 4D."
   },
   {
-    id: 5,
+    id: 8,
     nombre: "Silla Gamer RGB Lumina Edition",
     categoria: "Sillas",
     precio: 189990,
@@ -63,7 +66,7 @@ const PRODUCTOS_INICIALES = [
 
   // ================= JUEGOS DE MESA =================
   {
-    id: 6,
+    id: 3,
     nombre: "Catan El Juego",
     categoria: "Juegos de Mesa",
     precio: 34990,
@@ -74,7 +77,7 @@ const PRODUCTOS_INICIALES = [
     descripcion: "Juego de mesa clásico de comercio y colonización de islas para toda la familia."
   },
   {
-    id: 7,
+    id: 9,
     nombre: "Carcassonne Edición Plus",
     categoria: "Juegos de Mesa",
     precio: 38990,
@@ -84,7 +87,7 @@ const PRODUCTOS_INICIALES = [
     descripcion: "Estrategia medieval construyendo caminos, monasterios y castillos por losas."
   },
   {
-    id: 8,
+    id: 10,
     nombre: "Dixit Odyssey Juego de Mesa",
     categoria: "Juegos de Mesa",
     precio: 29990,
@@ -97,7 +100,7 @@ const PRODUCTOS_INICIALES = [
 
   // ================= PERIFÉRICOS =================
   {
-    id: 9,
+    id: 4,
     nombre: "Teclado Mecánico RGB Switch Blue",
     categoria: "Periféricos",
     precio: 45990,
@@ -108,7 +111,7 @@ const PRODUCTOS_INICIALES = [
     descripcion: "Teclado mecánico con retroiluminación RGB configurable y switches táctiles."
   },
   {
-    id: 10,
+    id: 5,
     nombre: "Mouse Gamer 16000 DPI Sensor Óptico",
     categoria: "Periféricos",
     precio: 29990,
@@ -133,7 +136,7 @@ const PRODUCTOS_INICIALES = [
   {
     id: 12,
     nombre: "PC Gamer RTX 4060 Ryzen 5 16GB",
-    categoria: "Computadores",
+    categoria: "Computadores Gamer",
     precio: 849990,
     precioOferta: 799990,
     stock: 5,
@@ -144,7 +147,7 @@ const PRODUCTOS_INICIALES = [
   {
     id: 13,
     nombre: "Notebook Gamer i7 RTX 4070 144Hz",
-    categoria: "Computadores",
+    categoria: "Computadores Gamer",
     precio: 1299990,
     stock: 1, // Stock Crítico
     stockCritico: 3,

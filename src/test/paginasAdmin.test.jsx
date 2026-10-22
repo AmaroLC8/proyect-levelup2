@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import App from '../App';
 import { obtenerProductos, obtenerProductoPorId } from '../data/productos';
-import { obtenerCategorias } from '../data/categorias';
+import { obtenerCategorias, crearCategoria } from '../data/categorias';
 import { obtenerUsuarios, obtenerUsuarioPorId } from '../data/usuarios';
 import { crearOrden } from '../data/ordenes';
 
@@ -41,7 +41,7 @@ describe('Pruebas del panel de administración', () => {
       );
       const numeros = screen.getAllByRole('link', { name: /^#\d{8}-\d{3}$/ }).map((enlace) => enlace.textContent);
       expect(numeros).toEqual(['#20261012-002', '#20261001-001']);
-      expect(screen.getByText('2 críticos')).toBeInTheDocument();
+      expect(screen.getByText('5 críticos')).toBeInTheDocument();
     });
 
     it('el menú lateral permite volver a la tienda y cerrar sesión', () => {
@@ -57,10 +57,10 @@ describe('Pruebas del panel de administración', () => {
   describe('Productos (RF14 y RF15)', () => {
     it('lista todos los productos y filtra los de stock crítico desde el dashboard', () => {
       abrirAdminEn('/admin/productos');
-      expect(screen.getByText('Mostrando: 5 / 5')).toBeInTheDocument();
+      expect(screen.getByText('Mostrando: 15 / 15')).toBeInTheDocument();
 
       fireEvent.click(screen.getByLabelText(/ver solo stock crítico/i));
-      expect(screen.getByText('Mostrando: 2 / 5')).toBeInTheDocument();
+      expect(screen.getByText('Mostrando: 5 / 15')).toBeInTheDocument();
       expect(screen.getByText('Mouse Gamer 16000 DPI Sensor Óptico')).toBeInTheDocument();
       expect(screen.queryByText('PlayStation 5 Slim 1TB')).not.toBeInTheDocument();
     });
@@ -98,7 +98,7 @@ describe('Pruebas del panel de administración', () => {
       fireEvent.click(within(filaCon('PlayStation 5 Slim 1TB')).getByTitle('Eliminar'));
       expect(window.confirm).toHaveBeenCalled();
       expect(screen.queryByText('PlayStation 5 Slim 1TB')).not.toBeInTheDocument();
-      expect(obtenerProductos()).toHaveLength(4);
+      expect(obtenerProductos()).toHaveLength(14);
     });
 
     it('muestra el detalle de un producto en modo lectura', () => {
@@ -120,22 +120,24 @@ describe('Pruebas del panel de administración', () => {
       fireEvent.click(within(ventana()).getByRole('button', { name: /crear categoría/i }));
       expect(screen.getByText('Ya existe una categoría con ese nombre')).toBeInTheDocument();
 
-      escribirEn(camposDeVentana()[0], 'Accesorios');
+      escribirEn(camposDeVentana()[0], 'Streaming');
       fireEvent.click(within(ventana()).getByRole('button', { name: /crear categoría/i }));
-      expect(screen.getByText('Accesorios')).toBeInTheDocument();
-      expect(obtenerCategorias()).toHaveLength(6);
+      expect(ventana()).toBeNull();
+      expect(screen.getByText('Streaming')).toBeInTheDocument();
+      expect(obtenerCategorias()).toHaveLength(7);
     });
 
     it('no elimina categorías con productos y sí elimina las vacías', () => {
+      crearCategoria({ nombre: 'Streaming', descripcion: 'Sin productos todavía' });
       abrirAdminEn('/admin/categorias');
 
       fireEvent.click(within(filaCon('Sillas')).getByTitle('Eliminar'));
-      expect(screen.getByText(/no se puede eliminar: tiene 1 producto/i)).toBeInTheDocument();
+      expect(screen.getByText(/no se puede eliminar: tiene 2 producto/i)).toBeInTheDocument();
       expect(window.confirm).not.toHaveBeenCalled();
 
-      fireEvent.click(within(filaCon('Computadores Gamer')).getByTitle('Eliminar'));
-      expect(screen.queryByText('Computadores Gamer')).not.toBeInTheDocument();
-      expect(obtenerCategorias()).toHaveLength(4);
+      fireEvent.click(within(filaCon('Streaming')).getByTitle('Eliminar'));
+      expect(screen.queryByText('Streaming')).not.toBeInTheDocument();
+      expect(obtenerCategorias()).toHaveLength(6);
     });
   });
 

@@ -38,9 +38,16 @@ describe('Pruebas unitarias en data/categorias.js', () => {
     expect(repetida.ok).toBe(false);
     expect(repetida.error).toMatch(/ya existe/i);
 
-    const nueva = crearCategoria({ nombre: 'Accesorios', descripcion: 'Fundas y cables' });
+    const nueva = crearCategoria({ nombre: 'Streaming', descripcion: 'Cámaras y micrófonos' });
     expect(nueva.ok).toBe(true);
-    expect(obtenerCategorias()).toHaveLength(6);
+    expect(obtenerCategorias()).toHaveLength(7);
+  });
+
+  it('cada producto inicial pertenece a una categoría existente', () => {
+    const nombres = obtenerCategorias().map((c) => c.nombre);
+    // Si un producto usa una categoría que no existe, no se muestra en la tienda
+    expect(nombres).toEqual(expect.arrayContaining(['Consolas', 'Periféricos', 'Sillas', 'Juegos de Mesa', 'Computadores Gamer', 'Accesorios']));
+    nombres.forEach((nombre) => expect(contarProductosPorCategoria(nombre)).toBeGreaterThan(0));
   });
 
   it('actualizarCategoria al renombrar mueve sus productos al nuevo nombre (RF17)', () => {
@@ -48,17 +55,17 @@ describe('Pruebas unitarias en data/categorias.js', () => {
 
     expect(resultado.ok).toBe(true);
     expect(obtenerProductoPorId(2).categoria).toBe('Sillas Gamer');
-    expect(contarProductosPorCategoria('Sillas Gamer')).toBe(1);
+    expect(contarProductosPorCategoria('Sillas Gamer')).toBe(2);
   });
 
   it('eliminarCategoria no permite borrar categorías con productos asociados', () => {
-    const conProductos = eliminarCategoria(2); // Periféricos: teclado y mouse
+    const conProductos = eliminarCategoria(2); // Periféricos: teclado, mouse y audífonos
     expect(conProductos.ok).toBe(false);
-    expect(conProductos.error).toMatch(/2 producto/);
+    expect(conProductos.error).toMatch(/3 producto/);
 
-    const vacia = eliminarCategoria(5); // Computadores Gamer: sin productos
-    expect(vacia.ok).toBe(true);
-    expect(obtenerCategorias()).toHaveLength(4);
+    const { categoria: vacia } = crearCategoria({ nombre: 'Streaming', descripcion: '' });
+    expect(eliminarCategoria(vacia.id).ok).toBe(true);
+    expect(obtenerCategorias()).toHaveLength(6);
   });
 
   it('obtenerCategoriasActivas oculta las categorías desactivadas', () => {
@@ -66,6 +73,6 @@ describe('Pruebas unitarias en data/categorias.js', () => {
 
     const nombres = obtenerCategoriasActivas().map((c) => c.nombre);
     expect(nombres).not.toContain('Juegos de Mesa');
-    expect(nombres).toHaveLength(4);
+    expect(nombres).toHaveLength(5);
   });
 });
