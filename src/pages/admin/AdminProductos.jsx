@@ -1,300 +1,461 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import {
-  obtenerProductos,
-  crearProducto,
-  actualizarProducto,
-  eliminarProducto,
-  esOferta,
-} from '../../data/productos';
+import { obtenerProductos } from '../../data/productos';
+
+// Función de respaldo para guardar en el localStorage
+const guardarEnLocalStorage = (lista) => {
+  localStorage.setItem('levelup_productos', JSON.stringify(lista));
+};
 
 export default function AdminProductos() {
   const [productos, setProductos] = useState([]);
-  const [modoEdicion, setModoEdicion] = useState(false);
-  const [idEditando, setIdEditando] = useState(null);
+  const [filtro, setFiltro] = useState('');
+  const [soloCriticos, setSoloCriticos] = useState(false);
+  const [modoModal, setModoModal] = useState(null); // 'crear' | 'editar' | 'ver' | null
+  const [productoSel, setProductoSel] = useState(null);
 
-  // Estado del formulario para crear/editar
+  // Estado del formulario
   const [form, setForm] = useState({
+    id: '',
     nombre: '',
     categoria: 'Consolas',
-    precio: '',
-    precioOferta: '',
-    stock: '',
-    stockCritico: '5',
-    imagen: '',
+    precio: 0,
+    precioOferta: 0,
+    stock: 10,
+    stockCritico: 5,
     descripcion: '',
+    imagen: ''
   });
 
-  const cargarLista = () => {
-    setProductos(obtenerProductos());
-  };
-
   useEffect(() => {
-    cargarLista();
+    cargarProductos();
   }, []);
 
-  const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+  const cargarProductos = () => {
+    const lista = obtenerProductos() || [];
+    setProductos(lista);
   };
 
-  const limpiarFormulario = () => {
+  const handleAbrirCrear = () => {
     setForm({
+      id: Date.now().toString(),
       nombre: '',
       categoria: 'Consolas',
-      precio: '',
-      precioOferta: '',
-      stock: '',
-      stockCritico: '5',
-      imagen: '',
+      precio: 0,
+      precioOferta: 0,
+      stock: 10,
+      stockCritico: 5,
       descripcion: '',
+      imagen: '[suspicious link removed]'
     });
-    setModoEdicion(false);
-    setIdEditando(null);
+    setModoModal('crear');
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!form.nombre.trim() || !form.precio || !form.stock) {
-      alert('Nombre, precio y stock son campos obligatorios');
-      return;
-    }
-
-    if (form.precioOferta && Number(form.precioOferta) >= Number(form.precio)) {
-      alert('El precio de oferta debe ser menor al precio normal');
-      return;
-    }
-
-    if (modoEdicion) {
-      actualizarProducto(idEditando, form);
-    } else {
-      crearProducto({
-        ...form,
-        imagen: form.imagen.trim() || 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=500&auto=format&fit=crop',
-      });
-    }
-
-    limpiarFormulario();
-    cargarLista();
-  };
-
-  const iniciarEdicion = (prod) => {
-    setModoEdicion(true);
-    setIdEditando(prod.id);
+  const handleAbrirEditar = (prod) => {
+    setProductoSel(prod);
     setForm({
-      nombre: prod.nombre,
-      categoria: prod.categoria,
-      precio: prod.precio,
-      precioOferta: prod.precioOferta || '',
-      stock: prod.stock,
-      stockCritico: prod.stockCritico || 5,
-      imagen: prod.imagen,
-      descripcion: prod.descripcion,
+      id: prod.id,
+      nombre: prod.nombre || prod.titulo || '',
+      categoria: prod.categoria || 'Gamer',
+      precio: prod.precio || 0,
+      precioOferta: prod.precioOferta || 0,
+      stock: prod.stock ?? 0,
+      stockCritico: prod.stockCritico ?? 5,
+      descripcion: prod.descripcion || '',
+      imagen: prod.imagen || ''
     });
+    setModoModal('editar');
   };
 
-  const handleEliminar = (id) => {
-    if (window.confirm('¿Seguro que deseas eliminar este producto?')) {
-      eliminarProducto(id);
-      cargarLista();
+  const handleAbrirVer = (prod) => {
+    setProductoSel(prod);
+    setModoModal('ver');
+  };
+
+  const handleCerrarModal = () => {
+    setModoModal(null);
+    setProductoSel(null);
+  };
+
+  const handleGuardar = (evento) => {
+    evento.preventDefault();
+    let listaActualizada = [...productos];
+
+    if (modoModal === 'crear') {
+      const nuevo = {
+        ...form,
+        precio: Number(form.precio),
+        precioOferta: Number(form.precioOferta),
+        stock: Number(form.stock),
+        stockCritico: Number(form.stockCritico)
+      };
+      listaActualizada.push(nuevo);
+    } else if (modoModal === 'editar') {
+      listaActualizada = listaActualizada.map((item) =>
+        item.id === form.id
+          ? {
+              ...item,
+              ...form,
+              precio: Number(form.precio),
+              precioOferta: Number(form.precioOferta),
+              stock: Number(form.stock),
+              stockCritico: Number(form.stockCritico)
+            }
+          : item
+      );
+    }
+
+    // Guarda los cambios en localStorage y actualiza el estado
+    guardarEnLocalStorage(listaActualizada);
+    setProductos(listaActualizada);
+    handleCerrarModal();
+  };
+
+  const handleEliminar = (idProducto) => {
+    if (window.confirm('¿Estás seguro de eliminar este producto del inventario?')) {
+      const listaActualizada = productos.filter((item) => item.id !== idProducto);
+      guardarEnLocalStorage(listaActualizada);
+      setProductos(listaActualizada);
     }
   };
+
+  const productosFiltrados = productos.filter((item) => {
+    const nombre = (item.nombre || item.titulo || '').toLowerCase();
+    const cat = (item.categoria || '').toLowerCase();
+    const coincideBusqueda = nombre.includes(filtro.toLowerCase()) || cat.includes(filtro.toLowerCase());
+    
+    const umbralCritico = item.stockCritico ?? 5;
+    const esCritico = (item.stock ?? 0) <= umbralCritico;
+
+    if (soloCriticos) {
+      return coincideBusqueda && esCritico;
+    }
+    return coincideBusqueda;
+  });
+
+  const formatearCLP = (monto) =>
+    new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(monto || 0);
 
   return (
-    <div className="container-fluid my-4 px-4">
+    <div className="container-fluid text-light">
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
-          <h2 className="text-info fw-bold mb-0">Gestión de Inventario (CRUD)</h2>
-          <small className="text-secondary">Crea, modifica o elimina productos de la tienda</small>
+          <h2 className="fw-bold text-info mb-1">
+            <i className="bi bi-box-seam me-2"></i>Gestión de Productos e Inventario
+          </h2>
+          <p className="text-secondary mb-0">
+            Administra los artículos del catálogo, precios, ofertas y alertas de stock crítico.
+          </p>
         </div>
-        <Link to="/admin" className="btn btn-outline-secondary">
-          <i className="bi bi-arrow-left me-1"></i>Volver al Dashboard
-        </Link>
+        <button className="btn btn-info fw-semibold" onClick={handleAbrirCrear}>
+          <i className="bi bi-plus-circle me-2"></i>Nuevo Producto
+        </button>
       </div>
 
-      <div className="row g-4">
-        {/* Formulario (Crear / Editar) */}
-        <div className="col-12 col-lg-4">
-          <div className="card shadow-sm border-secondary">
-            <div className="card-header bg-dark border-secondary py-3">
-              <h5 className="text-light fw-bold mb-0">
-                <i className={`bi ${modoEdicion ? 'bi-pencil-square' : 'bi-plus-circle'} me-2 text-info`}></i>
-                {modoEdicion ? 'Editar Producto' : 'Nuevo Producto'}
-              </h5>
-            </div>
-            <div className="card-body p-4">
-              <form onSubmit={handleSubmit}>
-                <div className="mb-3">
-                  <label className="form-label text-secondary small">Nombre *</label>
-                  <input
-                    type="text"
-                    name="nombre"
-                    className="form-control bg-dark text-light border-secondary"
-                    value={form.nombre}
-                    onChange={handleChange}
-                    required
-                  />
-                </div>
-
-                <div className="mb-3">
-                  <label className="form-label text-secondary small">Categoría</label>
-                  <select
-                    name="categoria"
-                    className="form-select bg-dark text-light border-secondary"
-                    value={form.categoria}
-                    onChange={handleChange}
-                  >
-                    <option value="Consolas">Consolas</option>
-                    <option value="Periféricos">Periféricos</option>
-                    <option value="Sillas">Sillas</option>
-                    <option value="Juegos de Mesa">Juegos de Mesa</option>
-                  </select>
-                </div>
-
-                <div className="row g-2 mb-3">
-                  <div className="col-6">
-                    <label className="form-label text-secondary small">Precio ($CLP) *</label>
-                    <input
-                      type="number"
-                      name="precio"
-                      className="form-control bg-dark text-light border-secondary"
-                      value={form.precio}
-                      onChange={handleChange}
-                      required
-                    />
-                  </div>
-                  <div className="col-6">
-                    <label className="form-label text-secondary small">Stock *</label>
-                    <input
-                      type="number"
-                      name="stock"
-                      className="form-control bg-dark text-light border-secondary"
-                      value={form.stock}
-                      onChange={handleChange}
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="mb-3">
-                  <label className="form-label text-secondary small">Precio oferta ($CLP)</label>
-                  <input
-                    type="number"
-                    name="precioOferta"
-                    className="form-control bg-dark text-light border-secondary"
-                    value={form.precioOferta}
-                    onChange={handleChange}
-                    placeholder="Opcional, déjalo vacío si no está en oferta"
-                  />
-                </div>
-
-                <div className="mb-3">
-                  <label className="form-label text-secondary small">URL de Imagen</label>
-                  <input
-                    type="url"
-                    name="imagen"
-                    className="form-control bg-dark text-light border-secondary"
-                    value={form.imagen}
-                    onChange={handleChange}
-                    placeholder="https://..."
-                  />
-                </div>
-
-                <div className="mb-3">
-                  <label className="form-label text-secondary small">Descripción</label>
-                  <textarea
-                    name="descripcion"
-                    className="form-control bg-dark text-light border-secondary"
-                    rows="3"
-                    value={form.descripcion}
-                    onChange={handleChange}
-                  ></textarea>
-                </div>
-
-                <div className="d-flex gap-2">
-                  <button type="submit" className={`btn ${modoEdicion ? 'btn-warning' : 'btn-success'} flex-grow-1 fw-bold`}>
-                    {modoEdicion ? 'Guardar Cambios' : 'Registrar Producto'}
-                  </button>
-                  {modoEdicion && (
-                    <button type="button" className="btn btn-outline-secondary" onClick={limpiarFormulario}>
-                      Cancelar
-                    </button>
-                  )}
-                </div>
-              </form>
+      {/* Barra de Búsqueda y Switch de Stock Crítico */}
+      <div className="card bg-dark border-secondary mb-4 p-3">
+        <div className="row g-3 align-items-center">
+          <div className="col-md-6">
+            <div className="input-group">
+              <span className="input-group-text bg-dark border-secondary text-secondary">
+                <i className="bi bi-search"></i>
+              </span>
+              <input
+                type="text"
+                className="form-control bg-dark text-light border-secondary"
+                placeholder="Buscar por nombre o categoría..."
+                value={filtro}
+                onChange={(evento) => setFiltro(evento.target.value)}
+              />
             </div>
           </div>
-        </div>
-
-        {/* Tabla de Productos Existentes */}
-        <div className="col-12 col-lg-8">
-          <div className="card shadow-sm border-secondary">
-            <div className="card-header bg-dark border-secondary py-3 d-flex justify-content-between align-items-center">
-              <h5 className="text-light fw-bold mb-0">Inventario Registrado</h5>
-              <span className="badge bg-info text-dark">{productos.length} artículos</span>
+          <div className="col-md-6 d-flex align-items-center justify-content-md-end">
+            <div className="form-check form-switch me-3">
+              <input
+                className="form-check-input"
+                type="checkbox"
+                id="checkCriticos"
+                checked={soloCriticos}
+                onChange={(evento) => setSoloCriticos(evento.target.checked)}
+              />
+              <label className="form-check-label text-warning fw-semibold" htmlFor="checkCriticos">
+                <i className="bi bi-exclamation-triangle me-1"></i>Ver solo Stock Crítico
+              </label>
             </div>
-            <div className="card-body p-0">
-              <div className="table-responsive">
-                <table className="table table-dark table-hover align-middle mb-0">
-                  <thead>
-                    <tr className="text-secondary small">
-                      <th>Foto</th>
-                      <th>Nombre</th>
-                      <th>Categoría</th>
-                      <th>Precio</th>
-                      <th>Stock</th>
-                      <th className="text-end">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {productos.map((p) => (
-                      <tr key={p.id}>
-                        <td>
-                          <img
-                            src={p.imagen}
-                            alt={p.nombre}
-                            style={{ width: '45px', height: '45px', objectFit: 'cover', borderRadius: '4px' }}
-                          />
-                        </td>
-                        <td className="fw-bold text-light">{p.nombre}</td>
-                        <td>{p.categoria}</td>
-                        <td>
-                          ${Number(p.precio).toLocaleString('es-CL')}
-                          {esOferta(p) && (
-                            <div className="small text-warning">
-                              Oferta: ${Number(p.precioOferta).toLocaleString('es-CL')}
-                            </div>
+            <span className="badge bg-secondary">
+              Mostrando: {productosFiltrados.length} / {productos.length}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Tabla de Productos */}
+      <div className="card bg-dark border-secondary shadow-sm">
+        <div className="table-responsive">
+          <table className="table table-dark table-hover align-middle mb-0">
+            <thead>
+              <tr className="border-bottom border-secondary text-info">
+                <th>Producto</th>
+                <th>Categoría</th>
+                <th>Precio Base</th>
+                <th>Precio Oferta</th>
+                <th>Stock</th>
+                <th>Stock Crítico</th>
+                <th className="text-center">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {productosFiltrados.length === 0 ? (
+                <tr>
+                  <td colSpan="7" className="text-center py-4 text-muted">
+                    No se encontraron productos con los criterios seleccionados.
+                  </td>
+                </tr>
+              ) : (
+                productosFiltrados.map((prod) => {
+                  const umbralCritico = prod.stockCritico ?? 5;
+                  const enCritico = (prod.stock ?? 0) <= umbralCritico;
+
+                  return (
+                    <tr key={prod.id}>
+                      <td>
+                        <div className="d-flex align-items-center gap-2">
+                          {prod.imagen && (
+                            <img
+                              src={prod.imagen}
+                              alt={prod.nombre}
+                              style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '4px' }}
+                            />
                           )}
-                        </td>
-                        <td>
-                          <span className={`badge ${p.stock <= (p.stockCritico || 5) ? 'bg-danger' : 'bg-success'}`}>
-                            {p.stock}
-                          </span>
-                        </td>
-                        <td className="text-end">
+                          <div>
+                            <span className="fw-semibold text-light d-block">{prod.nombre || prod.titulo}</span>
+                            <small className="text-secondary">ID: #{prod.id}</small>
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        <span className="badge bg-secondary">{prod.categoria || 'Gamer'}</span>
+                      </td>
+                      <td className="fw-bold">{formatearCLP(prod.precio)}</td>
+                      <td>
+                        {prod.precioOferta > 0 ? (
+                          <span className="text-success fw-bold">{formatearCLP(prod.precioOferta)}</span>
+                        ) : (
+                          <span className="text-muted small">Sin Oferta</span>
+                        )}
+                      </td>
+                      <td>
+                        <span className={`badge ${enCritico ? 'bg-danger' : 'bg-success'}`}>
+                          {prod.stock ?? 0} un.
+                        </span>
+                      </td>
+                      <td>
+                        <span className="text-warning fw-semibold">{umbralCritico} un.</span>
+                      </td>
+                      <td className="text-center">
+                        <div className="btn-group btn-group-sm">
                           <button
-                            className="btn btn-sm btn-outline-info me-2"
-                            onClick={() => iniciarEdicion(p)}
+                            className="btn btn-outline-info"
+                            title="Ver Detalle"
+                            onClick={() => handleAbrirVer(prod)}
+                          >
+                            <i className="bi bi-eye"></i>
+                          </button>
+                          <button
+                            className="btn btn-outline-warning"
                             title="Editar"
+                            onClick={() => handleAbrirEditar(prod)}
                           >
                             <i className="bi bi-pencil"></i>
                           </button>
                           <button
-                            className="btn btn-sm btn-outline-danger"
-                            onClick={() => handleEliminar(p.id)}
+                            className="btn btn-outline-danger"
                             title="Eliminar"
+                            onClick={() => handleEliminar(prod.id)}
                           >
                             <i className="bi bi-trash"></i>
                           </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Modal de Crear / Editar / Ver */}
+      {modoModal && (
+        <div
+          className="modal d-block"
+          tabIndex="-1"
+          style={{ backgroundColor: 'rgba(0,0,0,0.75)' }}
+        >
+          <div className="modal-dialog modal-lg modal-dialog-centered">
+            <div className="modal-content bg-dark text-light border-info">
+              <div className="modal-header border-secondary">
+                <h5 className="modal-title fw-bold text-info">
+                  {modoModal === 'crear' && <><i className="bi bi-plus-circle me-2"></i>Nuevo Producto</>}
+                  {modoModal === 'editar' && <><i className="bi bi-pencil-square me-2"></i>Editar Producto</>}
+                  {modoModal === 'ver' && <><i className="bi bi-eye me-2"></i>Detalle de Producto</>}
+                </h5>
+                <button
+                  type="button"
+                  className="btn-close btn-close-white"
+                  onClick={handleCerrarModal}
+                ></button>
               </div>
+
+              {modoModal === 'ver' ? (
+                <div className="modal-body">
+                  <div className="row g-3">
+                    <div className="col-md-4 text-center">
+                      <img
+                        src={productoSel?.imagen || '[suspicious link removed]'}
+                        alt={productoSel?.nombre}
+                        className="img-fluid rounded border border-secondary"
+                      />
+                    </div>
+                    <div className="col-md-8">
+                      <h4 className="fw-bold text-info">{productoSel?.nombre || productoSel?.titulo}</h4>
+                      <p className="text-secondary">{productoSel?.descripcion || 'Sin descripción disponible.'}</p>
+                      <ul className="list-group list-group-flush bg-dark text-light">
+                        <li className="list-group-item bg-dark text-light border-secondary">
+                          <strong>Categoría:</strong> {productoSel?.categoria}
+                        </li>
+                        <li className="list-group-item bg-dark text-light border-secondary">
+                          <strong>Precio Base:</strong> {formatearCLP(productoSel?.precio)}
+                        </li>
+                        <li className="list-group-item bg-dark text-light border-secondary">
+                          <strong>Precio Oferta:</strong> {formatearCLP(productoSel?.precioOferta)}
+                        </li>
+                        <li className="list-group-item bg-dark text-light border-secondary">
+                          <strong>Stock Disponible:</strong> {productoSel?.stock} unidades
+                        </li>
+                        <li className="list-group-item bg-dark text-light border-secondary">
+                          <strong>Umbral Stock Crítico:</strong> {productoSel?.stockCritico || 5} unidades
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <form onSubmit={handleGuardar}>
+                  <div className="modal-body">
+                    <div className="row g-3">
+                      <div className="col-md-8">
+                        <label className="form-label text-secondary small fw-bold">Nombre del Producto</label>
+                        <input
+                          type="text"
+                          className="form-control bg-dark text-light border-secondary"
+                          required
+                          value={form.nombre}
+                          onChange={(evento) => setForm({ ...form, nombre: evento.target.value })}
+                        />
+                      </div>
+                      <div className="col-md-4">
+                        <label className="form-label text-secondary small fw-bold">Categoría</label>
+                        <select
+                          className="form-select bg-dark text-light border-secondary"
+                          value={form.categoria}
+                          onChange={(evento) => setForm({ ...form, categoria: evento.target.value })}
+                        >
+                          <option value="Consolas">Consolas</option>
+                          <option value="Juegos">Juegos</option>
+                          <option value="Accesorios">Accesorios</option>
+                          <option value="PC Gamer">PC Gamer</option>
+                          <option value="Coleccionables">Coleccionables</option>
+                        </select>
+                      </div>
+
+                      <div className="col-md-6">
+                        <label className="form-label text-secondary small fw-bold">Precio Base (\$ CLP)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          className="form-control bg-dark text-light border-secondary"
+                          required
+                          value={form.precio}
+                          onChange={(evento) => setForm({ ...form, precio: evento.target.value })}
+                        />
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label text-secondary small fw-bold">Precio Oferta (\$ CLP)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          className="form-control bg-dark text-light border-secondary"
+                          value={form.precioOferta}
+                          onChange={(evento) => setForm({ ...form, precioOferta: evento.target.value })}
+                        />
+                      </div>
+
+                      <div className="col-md-6">
+                        <label className="form-label text-secondary small fw-bold">Stock Actual</label>
+                        <input
+                          type="number"
+                          min="0"
+                          className="form-control bg-dark text-light border-secondary"
+                          required
+                          value={form.stock}
+                          onChange={(evento) => setForm({ ...form, stock: evento.target.value })}
+                        />
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label text-warning small fw-bold">
+                          <i className="bi bi-exclamation-triangle me-1"></i>Umbral Stock Crítico
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          className="form-control bg-dark text-light border-warning"
+                          required
+                          value={form.stockCritico}
+                          onChange={(evento) => setForm({ ...form, stockCritico: evento.target.value })}
+                        />
+                      </div>
+
+                      <div className="col-12">
+                        <label className="form-label text-secondary small fw-bold">URL Imagen del Producto</label>
+                        <input
+                          type="text"
+                          className="form-control bg-dark text-light border-secondary"
+                          placeholder="Ingresa la URL de la imagen"
+                          value={form.imagen}
+                          onChange={(evento) => setForm({ ...form, imagen: evento.target.value })}
+                        />
+                      </div>
+
+                      <div className="col-12">
+                        <label className="form-label text-secondary small fw-bold">Descripción</label>
+                        <textarea
+                          className="form-control bg-dark text-light border-secondary"
+                          rows="3"
+                          value={form.descripcion}
+                          onChange={(evento) => setForm({ ...form, descripcion: evento.target.value })}
+                        ></textarea>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="modal-footer border-secondary">
+                    <button
+                      type="button"
+                      className="btn btn-outline-secondary"
+                      onClick={handleCerrarModal}
+                    >
+                      Cancelar
+                    </button>
+                    <button type="submit" className="btn btn-info fw-bold">
+                      {modoModal === 'crear' ? 'Guardar Producto' : 'Actualizar Cambios'}
+                    </button>
+                  </div>
+                </form>
+              )}
             </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
