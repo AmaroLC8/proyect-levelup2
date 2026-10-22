@@ -60,7 +60,7 @@ const PRODUCTOS_INICIALES = [
     precio: 189990,
     stock: 7,
     stockCritico: 3,
-    imagen: "https://images.unsplash.com/photo-1580481077195-c3a821a58875?w=500&auto=format&fit=crop",
+    imagen: "https://media.falabella.com/falabellaCL/148583525_01/w=1500,h=1500,fit=cover",
     descripcion: "Iluminación LED RGB perimetral con control remoto y cuero sintético transpirable."
   },
 
