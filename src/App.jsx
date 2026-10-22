@@ -4,6 +4,8 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import AdminOrdenes from "./pages/admin/AdminOrdenes";
 import VerBoletaAdmin from "./pages/admin/VerBoletaAdmin";
 
+import AdminPerfil from "./pages/admin/AdminPerfil";
+
 import AdminReportes from "./pages/admin/AdminReportes";
 
 import AdminCategorias from "./pages/admin/AdminCategorias";
@@ -87,10 +89,7 @@ export default function App() {
                     <Route path="categorias" element={<AdminCategorias />} />
                     <Route path="usuarios" element={<AdminUsuarios />} />
                     <Route path="reportes" element={<AdminReportes />} />
-                    <Route
-                      path="perfil"
-                      element={<EnConstruccion titulo="Perfil de Administrador" />}
-                    />
+                    <Route path="perfil" element={<AdminPerfil />} />
                   </Route>
                 </Route>
               </Routes>
