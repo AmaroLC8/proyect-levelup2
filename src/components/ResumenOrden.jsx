@@ -17,7 +17,7 @@ export default function ResumenOrden({ orden, etiquetaTotal = 'Total pagado' }) 
 
       <h5 className="text-info border-bottom border-secondary pb-2 mb-3">Dirección de entrega</h5>
       <p className="text-light small mb-1">
-        {cliente.calle} {cliente.depto && `(${cliente.depto})`}, {cliente.comuna}, {cliente.region}
+        {[cliente.depto ? `${cliente.calle} (${cliente.depto})` : cliente.calle, cliente.comuna, cliente.region].join(', ')}
       </p>
       {cliente.indicaciones && (
         <p className="text-secondary small fst-italic">"{cliente.indicaciones}"</p>
