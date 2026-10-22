@@ -1,6 +1,9 @@
 import React from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
+import AdminOrdenes from "./pages/admin/AdminOrdenes";
+import VerBoletaAdmin from "./pages/admin/VerBoletaAdmin";
+
 // Contextos
 import { AuthProvider } from "./context/AuthContext";
 import { CartProvider } from "./context/CartContext";
@@ -72,10 +75,8 @@ export default function App() {
                 <Route element={<RutaProtegidaAdmin />}>
                   <Route path="/admin" element={<AdminLayout />}>
                     <Route index element={<AdminDashboard />} />
-                    <Route
-                      path="ordenes"
-                      element={<EnConstruccion titulo="Gestión de Órdenes y Boletas" />}
-                    />
+                    <Route path="ordenes" element={<AdminOrdenes />} />
+                    <Route path="ordenes/:id" element={<VerBoletaAdmin />} />
                     <Route path="productos" element={<AdminProductos />} />
                     <Route
                       path="categorias"
