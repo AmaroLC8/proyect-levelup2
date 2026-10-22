@@ -1,52 +1,54 @@
-import React, { useState, useEffect } from 'react';
-import { obtenerProductos } from '../../data/productos';
-
-// Función de respaldo para guardar en el localStorage
-const guardarEnLocalStorage = (lista) => {
-  localStorage.setItem('levelup_productos', JSON.stringify(lista));
-};
+import React, { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import {
+  obtenerProductos,
+  crearProducto,
+  actualizarProducto,
+  eliminarProducto,
+  esOferta,
+} from '../../data/productos';
+import { obtenerCategorias } from '../../data/categorias';
+import { formatearDinero } from '../../utils/formato';
 
 export default function AdminProductos() {
-  const [productos, setProductos] = useState([]);
+  // ?criticos=1 llega desde el dashboard para abrir el listado de productos críticos (RF15)
+  const [searchParams] = useSearchParams();
+  const [productos, setProductos] = useState(() => obtenerProductos());
   const [filtro, setFiltro] = useState('');
-  const [soloCriticos, setSoloCriticos] = useState(false);
+  const [soloCriticos, setSoloCriticos] = useState(searchParams.get('criticos') === '1');
   const [modoModal, setModoModal] = useState(null); // 'crear' | 'editar' | 'ver' | null
   const [productoSel, setProductoSel] = useState(null);
+  const [error, setError] = useState('');
+  const categorias = obtenerCategorias();
 
   // Estado del formulario
   const [form, setForm] = useState({
-    id: '',
+    id: null,
     nombre: '',
-    categoria: 'Consolas',
-    precio: 0,
-    precioOferta: 0,
-    stock: 10,
+    categoria: '',
+    precio: '',
+    precioOferta: '',
+    stock: '',
     stockCritico: 5,
     descripcion: '',
     imagen: ''
   });
 
-  useEffect(() => {
-    cargarProductos();
-  }, []);
-
-  const cargarProductos = () => {
-    const lista = obtenerProductos() || [];
-    setProductos(lista);
-  };
+  const recargarProductos = () => setProductos(obtenerProductos());
 
   const handleAbrirCrear = () => {
     setForm({
-      id: Date.now().toString(),
+      id: null,
       nombre: '',
-      categoria: 'Consolas',
-      precio: 0,
-      precioOferta: 0,
-      stock: 10,
+      categoria: categorias[0]?.nombre ?? '',
+      precio: '',
+      precioOferta: '',
+      stock: '',
       stockCritico: 5,
       descripcion: '',
-      imagen: '[suspicious link removed]'
+      imagen: ''
     });
+    setError('');
     setModoModal('crear');
   };
 
@@ -54,15 +56,16 @@ export default function AdminProductos() {
     setProductoSel(prod);
     setForm({
       id: prod.id,
-      nombre: prod.nombre || prod.titulo || '',
-      categoria: prod.categoria || 'Gamer',
-      precio: prod.precio || 0,
-      precioOferta: prod.precioOferta || 0,
-      stock: prod.stock ?? 0,
+      nombre: prod.nombre,
+      categoria: prod.categoria,
+      precio: prod.precio,
+      precioOferta: prod.precioOferta || '',
+      stock: prod.stock,
       stockCritico: prod.stockCritico ?? 5,
       descripcion: prod.descripcion || '',
       imagen: prod.imagen || ''
     });
+    setError('');
     setModoModal('editar');
   };
 
@@ -78,43 +81,28 @@ export default function AdminProductos() {
 
   const handleGuardar = (evento) => {
     evento.preventDefault();
-    let listaActualizada = [...productos];
 
-    if (modoModal === 'crear') {
-      const nuevo = {
-        ...form,
-        precio: Number(form.precio),
-        precioOferta: Number(form.precioOferta),
-        stock: Number(form.stock),
-        stockCritico: Number(form.stockCritico)
-      };
-      listaActualizada.push(nuevo);
-    } else if (modoModal === 'editar') {
-      listaActualizada = listaActualizada.map((item) =>
-        item.id === form.id
-          ? {
-              ...item,
-              ...form,
-              precio: Number(form.precio),
-              precioOferta: Number(form.precioOferta),
-              stock: Number(form.stock),
-              stockCritico: Number(form.stockCritico)
-            }
-          : item
-      );
+    if (form.precioOferta && Number(form.precioOferta) >= Number(form.precio)) {
+      setError('El precio de oferta debe ser menor al precio base');
+      return;
     }
 
-    // Guarda los cambios en localStorage y actualiza el estado
-    guardarEnLocalStorage(listaActualizada);
-    setProductos(listaActualizada);
+    // El CRUD de data/productos.js convierte los números y asigna id e imagen por defecto
+    const { id, ...datos } = form;
+    if (modoModal === 'crear') {
+      crearProducto(datos);
+    } else if (modoModal === 'editar') {
+      actualizarProducto(id, datos);
+    }
+
+    recargarProductos();
     handleCerrarModal();
   };
 
   const handleEliminar = (idProducto) => {
     if (window.confirm('¿Estás seguro de eliminar este producto del inventario?')) {
-      const listaActualizada = productos.filter((item) => item.id !== idProducto);
-      guardarEnLocalStorage(listaActualizada);
-      setProductos(listaActualizada);
+      eliminarProducto(idProducto);
+      recargarProductos();
     }
   };
 
@@ -131,9 +119,6 @@ export default function AdminProductos() {
     }
     return coincideBusqueda;
   });
-
-  const formatearCLP = (monto) =>
-    new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(monto || 0);
 
   return (
     <div className="container-fluid text-light">
@@ -227,18 +212,18 @@ export default function AdminProductos() {
                             />
                           )}
                           <div>
-                            <span className="fw-semibold text-light d-block">{prod.nombre || prod.titulo}</span>
+                            <span className="fw-semibold text-light d-block">{prod.nombre}</span>
                             <small className="text-secondary">ID: #{prod.id}</small>
                           </div>
                         </div>
                       </td>
                       <td>
-                        <span className="badge bg-secondary">{prod.categoria || 'Gamer'}</span>
+                        <span className="badge bg-secondary">{prod.categoria}</span>
                       </td>
-                      <td className="fw-bold">{formatearCLP(prod.precio)}</td>
+                      <td className="fw-bold">{formatearDinero(prod.precio)}</td>
                       <td>
-                        {prod.precioOferta > 0 ? (
-                          <span className="text-success fw-bold">{formatearCLP(prod.precioOferta)}</span>
+                        {esOferta(prod) ? (
+                          <span className="text-success fw-bold">{formatearDinero(prod.precioOferta)}</span>
                         ) : (
                           <span className="text-muted small">Sin Oferta</span>
                         )}
@@ -312,23 +297,24 @@ export default function AdminProductos() {
                   <div className="row g-3">
                     <div className="col-md-4 text-center">
                       <img
-                        src={productoSel?.imagen || '[suspicious link removed]'}
-                        alt={productoSel?.nombre}
-                        className="img-fluid rounded border border-secondary"
+                        src={productoSel.imagen}
+                        alt={productoSel.nombre}
+                        className="img-fluid rounded border border-secondary bg-white"
                       />
                     </div>
                     <div className="col-md-8">
-                      <h4 className="fw-bold text-info">{productoSel?.nombre || productoSel?.titulo}</h4>
+                      <h4 className="fw-bold text-info">{productoSel.nombre}</h4>
                       <p className="text-secondary">{productoSel?.descripcion || 'Sin descripción disponible.'}</p>
                       <ul className="list-group list-group-flush bg-dark text-light">
                         <li className="list-group-item bg-dark text-light border-secondary">
                           <strong>Categoría:</strong> {productoSel?.categoria}
                         </li>
                         <li className="list-group-item bg-dark text-light border-secondary">
-                          <strong>Precio Base:</strong> {formatearCLP(productoSel?.precio)}
+                          <strong>Precio Base:</strong> {formatearDinero(productoSel?.precio)}
                         </li>
                         <li className="list-group-item bg-dark text-light border-secondary">
-                          <strong>Precio Oferta:</strong> {formatearCLP(productoSel?.precioOferta)}
+                          <strong>Precio Oferta:</strong>{' '}
+                          {esOferta(productoSel) ? formatearDinero(productoSel.precioOferta) : 'Sin oferta'}
                         </li>
                         <li className="list-group-item bg-dark text-light border-secondary">
                           <strong>Stock Disponible:</strong> {productoSel?.stock} unidades
@@ -343,6 +329,7 @@ export default function AdminProductos() {
               ) : (
                 <form onSubmit={handleGuardar}>
                   <div className="modal-body">
+                    {error && <div className="alert alert-danger py-2">{error}</div>}
                     <div className="row g-3">
                       <div className="col-md-8">
                         <label className="form-label text-secondary small fw-bold">Nombre del Producto</label>
@@ -361,16 +348,14 @@ export default function AdminProductos() {
                           value={form.categoria}
                           onChange={(evento) => setForm({ ...form, categoria: evento.target.value })}
                         >
-                          <option value="Consolas">Consolas</option>
-                          <option value="Juegos">Juegos</option>
-                          <option value="Accesorios">Accesorios</option>
-                          <option value="PC Gamer">PC Gamer</option>
-                          <option value="Coleccionables">Coleccionables</option>
+                          {categorias.map((cat) => (
+                            <option key={cat.id} value={cat.nombre}>{cat.nombre}</option>
+                          ))}
                         </select>
                       </div>
 
                       <div className="col-md-6">
-                        <label className="form-label text-secondary small fw-bold">Precio Base (\$ CLP)</label>
+                        <label className="form-label text-secondary small fw-bold">Precio Base ($ CLP)</label>
                         <input
                           type="number"
                           min="0"
@@ -381,7 +366,7 @@ export default function AdminProductos() {
                         />
                       </div>
                       <div className="col-md-6">
-                        <label className="form-label text-secondary small fw-bold">Precio Oferta (\$ CLP)</label>
+                        <label className="form-label text-secondary small fw-bold">Precio Oferta ($ CLP, opcional)</label>
                         <input
                           type="number"
                           min="0"
@@ -421,7 +406,7 @@ export default function AdminProductos() {
                         <input
                           type="text"
                           className="form-control bg-dark text-light border-secondary"
-                          placeholder="Ingresa la URL de la imagen"
+                          placeholder="Opcional: si la dejas vacía se usa una imagen por defecto"
                           value={form.imagen}
                           onChange={(evento) => setForm({ ...form, imagen: evento.target.value })}
                         />

@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { obtenerProductos, obtenerPrecioFinal } from '../data/productos';
+import { obtenerCategoriasActivas } from '../data/categorias';
 import ProductCard from '../components/ProductCard';
 
 export default function Productos() {
+  const categorias = obtenerCategoriasActivas();
   const [productos, setProductos] = useState([]);
   const [filtroCategoria, setFiltroCategoria] = useState('Todas');
   const [precioMaximo, setPrecioMaximo] = useState('');
@@ -17,8 +19,12 @@ export default function Productos() {
     setProductos(obtenerProductos());
   }, []);
 
+  // Los productos de categorías desactivadas en el admin no se muestran en la tienda
+  const nombresActivos = categorias.map((c) => c.nombre);
+
   const productosFiltrados = productos.filter((p) => {
-    const coincideCategoria = filtroCategoria === 'Todas' || p.categoria === filtroCategoria;
+    const categoriaVisible = nombresActivos.includes(p.categoria);
+    const coincideCategoria = categoriaVisible && (filtroCategoria === 'Todas' || p.categoria === filtroCategoria);
     const coincideTexto = p.nombre.toLowerCase().includes(busqueda.toLowerCase());
     const coincidePrecio = !precioMaximo || obtenerPrecioFinal(p) <= Number(precioMaximo);
     return coincideCategoria && coincideTexto && coincidePrecio;
@@ -66,10 +72,9 @@ export default function Productos() {
             onChange={(e) => setFiltroCategoria(e.target.value)}
           >
             <option value="Todas">Todas las Categorías</option>
-            <option value="Consolas">Consolas</option>
-            <option value="Periféricos">Periféricos</option>
-            <option value="Sillas">Sillas</option>
-            <option value="Juegos de Mesa">Juegos de Mesa</option>
+            {categorias.map((cat) => (
+              <option key={cat.id} value={cat.nombre}>{cat.nombre}</option>
+            ))}
           </select>
         </div>
 

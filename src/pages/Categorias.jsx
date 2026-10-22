@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { obtenerProductos } from '../data/productos';
+import { obtenerCategoriasActivas } from '../data/categorias';
 import ProductCard from '../components/ProductCard';
 
 export default function Categorias() {
-  const categorias = ['Consolas', 'Periféricos', 'Sillas', 'Juegos de Mesa'];
-  const [categoriaSeleccionada, setCategoriaSeleccionada] = useState('Consolas');
+  // Se administran desde /admin/categorias (RF17)
+  const categorias = obtenerCategoriasActivas().map((c) => c.nombre);
+  const [categoriaSeleccionada, setCategoriaSeleccionada] = useState(categorias[0] ?? '');
   const todosLosProductos = obtenerProductos();
 
   const productosFiltrados = todosLosProductos.filter(
@@ -36,6 +38,11 @@ export default function Categorias() {
       </h4>
 
       <div className="row g-4">
+        {productosFiltrados.length === 0 && (
+          <div className="col-12 text-center text-secondary py-5">
+            Aún no hay productos en esta categoría.
+          </div>
+        )}
         {productosFiltrados.map((prod) => (
           <div className="col-12 col-sm-6 col-lg-4" key={prod.id}>
             <ProductCard producto={prod} />

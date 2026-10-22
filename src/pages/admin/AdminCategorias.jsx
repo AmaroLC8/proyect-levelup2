@@ -1,38 +1,38 @@
-import React, { useState, useEffect } from 'react';
-import { obtenerCategorias, guardarCategorias } from '../../data/categorias';
-import { obtenerProductos } from '../../data/productos';
+import React, { useState } from 'react';
+import {
+  obtenerCategorias,
+  crearCategoria,
+  actualizarCategoria,
+  eliminarCategoria,
+  contarProductosPorCategoria,
+} from '../../data/categorias';
 
 export default function AdminCategorias() {
-  const [categorias, setCategorias] = useState([]);
-  const [productos, setProductos] = useState([]);
+  const [categorias, setCategorias] = useState(() => obtenerCategorias());
   const [busqueda, setBusqueda] = useState('');
   const [modoModal, setModoModal] = useState(null); // 'crear' | 'editar' | 'ver' | null
   const [categoriaSel, setCategoriaSel] = useState(null);
+  const [error, setError] = useState('');
+  const [errorTabla, setErrorTabla] = useState('');
 
   // Estado del formulario
   const [form, setForm] = useState({
-    id: '',
+    id: null,
     nombre: '',
     descripcion: '',
     activa: true
   });
 
-  useEffect(() => {
-    cargarDatos();
-  }, []);
-
-  const cargarDatos = () => {
-    setCategorias(obtenerCategorias() || []);
-    setProductos(obtenerProductos() || []);
-  };
+  const recargarCategorias = () => setCategorias(obtenerCategorias());
 
   const handleAbrirCrear = () => {
     setForm({
-      id: Date.now().toString(),
+      id: null,
       nombre: '',
       descripcion: '',
       activa: true
     });
+    setError('');
     setModoModal('crear');
   };
 
@@ -44,6 +44,7 @@ export default function AdminCategorias() {
       descripcion: cat.descripcion || '',
       activa: cat.activa ?? true
     });
+    setError('');
     setModoModal('editar');
   };
 
@@ -59,44 +60,30 @@ export default function AdminCategorias() {
 
   const handleGuardar = (e) => {
     e.preventDefault();
-    let listaActualizada = [...categorias];
 
-    if (modoModal === 'crear') {
-      listaActualizada.push({ ...form });
-    } else if (modoModal === 'editar') {
-      listaActualizada = listaActualizada.map((item) =>
-        item.id === form.id ? { ...item, ...form } : item
-      );
-    }
-
-    guardarCategorias(listaActualizada);
-    setCategorias(listaActualizada);
-    handleCerrarModal();
-  };
-
-  const handleEliminar = (idCat) => {
-    const cantProds = productos.filter(
-      (p) => (p.categoria || '').toLowerCase() === (categorias.find((c) => c.id === idCat)?.nombre || '').toLowerCase()
-    ).length;
-
-    if (cantProds > 0) {
-      alert(`No se puede eliminar esta categoría porque tiene ${cantProds} producto(s) asociado(s).`);
+    // El CRUD valida nombres repetidos y, al renombrar, actualiza los productos
+    const { id, ...datos } = form;
+    const resultado = modoModal === 'crear' ? crearCategoria(datos) : actualizarCategoria(id, datos);
+    if (!resultado.ok) {
+      setError(resultado.error);
       return;
     }
 
-    if (window.confirm('¿Estás seguro de eliminar esta categoría?')) {
-      const listaActualizada = categorias.filter((item) => item.id !== idCat);
-      guardarCategorias(listaActualizada);
-      setCategorias(listaActualizada);
-    }
+    recargarCategorias();
+    handleCerrarModal();
   };
 
-  // Contar productos por categoría
-  const contarProductosPorCategoria = (nombreCat) => {
-    if (!nombreCat) return 0;
-    return productos.filter(
-      (p) => (p.categoria || '').toLowerCase() === nombreCat.toLowerCase()
-    ).length;
+  const handleEliminar = (cat) => {
+    // No se permite eliminar categorías con productos asociados
+    if (contarProductosPorCategoria(cat.nombre) > 0) {
+      setErrorTabla(eliminarCategoria(cat.id).error);
+      return;
+    }
+    if (!window.confirm('¿Estás seguro de eliminar esta categoría?')) return;
+
+    eliminarCategoria(cat.id);
+    setErrorTabla('');
+    recargarCategorias();
   };
 
   // Filtro de búsqueda
@@ -145,6 +132,13 @@ export default function AdminCategorias() {
           </div>
         </div>
       </div>
+
+      {errorTabla && (
+        <div className="alert alert-danger py-2 d-flex justify-content-between align-items-center">
+          {errorTabla}
+          <button type="button" className="btn-close" aria-label="Cerrar" onClick={() => setErrorTabla('')}></button>
+        </div>
+      )}
 
       {/* Tabla de Categorías */}
       <div className="card bg-dark border-secondary shadow-sm">
@@ -205,7 +199,7 @@ export default function AdminCategorias() {
                           <button
                             className="btn btn-outline-danger"
                             title="Eliminar"
-                            onClick={() => handleEliminar(cat.id)}
+                            onClick={() => handleEliminar(cat)}
                           >
                             <i className="bi bi-trash"></i>
                           </button>
@@ -250,6 +244,7 @@ export default function AdminCategorias() {
               ) : (
                 <form onSubmit={handleGuardar}>
                   <div className="modal-body">
+                    {error && <div className="alert alert-danger py-2">{error}</div>}
                     <div className="mb-3">
                       <label className="form-label text-secondary small fw-bold">Nombre de la Categoría</label>
                       <input
@@ -280,6 +275,7 @@ export default function AdminCategorias() {
                       <label className="form-check-label text-light fw-semibold" htmlFor="switchActiva">
                         Categoría Activa
                       </label>
+                      <div className="form-text text-secondary">Las categorías inactivas no se muestran en la tienda.</div>
                     </div>
                   </div>
                   <div className="modal-footer border-secondary">

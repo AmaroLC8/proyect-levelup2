@@ -61,6 +61,9 @@ const PRODUCTOS_INICIALES = [
 
 const STORAGE_KEY = "levelup_productos";
 
+// Imagen usada cuando el administrador crea un producto sin URL de imagen
+export const IMAGEN_POR_DEFECTO = "https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=500&auto=format&fit=crop";
+
 const inicializarStorage = () => {
   const guardados = localStorage.getItem(STORAGE_KEY);
   if (!guardados) {
@@ -90,6 +93,7 @@ export const crearProducto = (nuevoProducto) => {
   const productos = obtenerProductos();
   const productoConId = {
     ...normalizarProducto(nuevoProducto),
+    imagen: nuevoProducto.imagen?.trim() || IMAGEN_POR_DEFECTO,
     id: Date.now(),
   };
   const listaActualizada = [...productos, productoConId];
@@ -111,6 +115,15 @@ export const eliminarProducto = (id) => {
   const listaActualizada = productos.filter((p) => p.id !== Number(id));
   localStorage.setItem(STORAGE_KEY, JSON.stringify(listaActualizada));
   return true;
+};
+
+// Usado al renombrar una categoría desde el admin
+export const reemplazarCategoriaEnProductos = (nombreAnterior, nombreNuevo) => {
+  const productos = obtenerProductos();
+  const listaActualizada = productos.map((p) =>
+    p.categoria === nombreAnterior ? { ...p, categoria: nombreNuevo } : p
+  );
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(listaActualizada));
 };
 
 // Resta del inventario las unidades vendidas en una orden pagada
