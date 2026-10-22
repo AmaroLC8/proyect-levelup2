@@ -106,6 +106,17 @@ describe('Pruebas de las vistas de la tienda', () => {
       expect(rutaActual()).toBe('/registro');
     });
 
+    it('el registro no acepta símbolos ni números en el nombre y apellidos', () => {
+      abrirEn('/registro');
+      escribir('nombre', 'J@ime');
+      escribir('apellidos', 'Soto#1');
+      fireEvent.click(screen.getByRole('button', { name: 'Crear cuenta' }));
+
+      expect(screen.getByText(/^El nombre solo puede tener letras/)).toBeInTheDocument();
+      expect(screen.getByText(/^El apellido solo puede tener letras/)).toBeInTheDocument();
+      expect(campo('nombre')).toHaveClass('is-invalid');
+    });
+
     it('avisa el descuento Duoc y al registrarse entra con la cuenta nueva (RF1)', () => {
       abrirEn('/registro');
       escribir('nombre', 'María');
@@ -222,6 +233,22 @@ describe('Pruebas de las vistas de la tienda', () => {
       expect(screen.getByText(/100 pts/)).toBeInTheDocument();
       expect(screen.getByText('LVLPEDRO')).toBeInTheDocument();
       expect(screen.getByText('#20261001-001')).toBeInTheDocument();
+    });
+
+    it('el perfil valida el nombre al editarlo y actualiza el saludo de la barra (RF5)', () => {
+      localStorage.setItem('levelup_sesion', '2');
+      abrirEn('/perfil');
+      fireEvent.click(screen.getByRole('button', { name: /editar/i }));
+
+      const [nombre] = document.querySelectorAll('main form input[type="text"]');
+      fireEvent.change(nombre, { target: { value: 'P3dro!' } });
+      fireEvent.click(screen.getByRole('button', { name: /^guardar$/i }));
+      expect(screen.getByText(/^El nombre solo puede tener letras/)).toBeInTheDocument();
+
+      fireEvent.change(nombre, { target: { value: 'Pedro Pablo' } });
+      fireEvent.click(screen.getByRole('button', { name: /^guardar$/i }));
+      expect(screen.getByText(/actualizados exitosamente/)).toBeInTheDocument();
+      expect(screen.getByTitle('Ver mi perfil')).toHaveTextContent('Hola, Pedro Pablo');
     });
 
     it('contacto muestra los errores y luego el mensaje enviado (RF7)', () => {

@@ -5,6 +5,8 @@ import {
   esPasswordSegura,
   calcularEdad,
   esMayorDeEdad,
+  esNombreValido,
+  validarNombreCompleto,
   validarRegistro,
 } from '../utils/validaciones';
 
@@ -40,6 +42,25 @@ describe('Pruebas unitarias en utils/validaciones.js', () => {
     expect(esPasswordSegura('12345678')).toBe(false);
   });
 
+  it('esNombreValido acepta letras con tildes, ñ y nombres compuestos', () => {
+    ['Ana', 'María José', 'Muñoz', 'Pérez-Cotapos', "O'Higgins", '  Lukas  '].forEach((nombre) =>
+      expect(esNombreValido(nombre)).toBe(true)
+    );
+  });
+
+  it('esNombreValido rechaza arrobas, números, símbolos y nombres de una sola letra', () => {
+    ['J@ime', 'Ana1', 'Soto#', 'ana@gmail.com', 'A', 'María  José', '-Ana', 'x'.repeat(51)].forEach((nombre) =>
+      expect(esNombreValido(nombre)).toBe(false)
+    );
+  });
+
+  it('validarNombreCompleto devuelve el primer error encontrado o null', () => {
+    expect(validarNombreCompleto('Ana', 'Soto')).toBeNull();
+    expect(validarNombreCompleto('', 'Soto')).toBe('Nombre y apellidos son obligatorios');
+    expect(validarNombreCompleto('An@', 'Soto')).toMatch(/^El nombre solo puede tener letras/);
+    expect(validarNombreCompleto('Ana', 'S0to')).toMatch(/^El apellido solo puede tener letras/);
+  });
+
   it('calcularEdad no suma el año si todavía no es el cumpleaños', () => {
     const hoy = new Date('2026-10-21T12:00:00');
     expect(calcularEdad('2008-10-21', hoy)).toBe(18);
@@ -64,6 +85,12 @@ describe('Pruebas unitarias en utils/validaciones.js', () => {
       fechaNacimiento: '',
     });
     expect(Object.keys(errores)).toEqual(['nombre', 'apellidos', 'fechaNacimiento']);
+  });
+
+  it('validarRegistro rechaza nombres y apellidos con caracteres que no son letras', () => {
+    const errores = validarRegistro({ ...registroValido, nombre: 'An@', apellidos: 'Soto123' });
+    expect(errores.nombre).toMatch(/solo puede tener letras/);
+    expect(errores.apellidos).toMatch(/solo puede tener letras/);
   });
 
   it('validarRegistro rechaza menores de edad, contraseñas débiles y contraseñas distintas', () => {

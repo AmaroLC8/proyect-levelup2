@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { actualizarUsuario } from '../data/usuarios';
 import { obtenerOrdenesPorUsuario, ordenarPorFechaDesc } from '../data/ordenes';
 import { formatearDinero, formatearFecha } from '../utils/formato';
+import { validarNombreCompleto } from '../utils/validaciones';
 import EstadoOrden from '../components/EstadoOrden';
 
 export default function Perfil() {
@@ -26,6 +27,12 @@ export default function Perfil() {
 
   const handleGuardar = (e) => {
     e.preventDefault();
+
+    const errorNombre = validarNombreCompleto(form.nombre, form.apellidos);
+    if (errorNombre) {
+      setMensaje({ tipo: 'danger', texto: errorNombre });
+      return;
+    }
 
     actualizarUsuario(usuario.id, {
       nombre: form.nombre.trim(),
@@ -51,7 +58,8 @@ export default function Perfil() {
 
       {mensaje && (
         <div className={`alert alert-${mensaje.tipo} alert-dismissible fade show`} role="alert">
-          <i className="bi bi-check-circle-fill me-2"></i>{mensaje.texto}
+          <i className={`bi ${mensaje.tipo === 'success' ? 'bi-check-circle-fill' : 'bi-exclamation-triangle-fill'} me-2`}></i>
+          {mensaje.texto}
         </div>
       )}
 
@@ -128,7 +136,7 @@ export default function Perfil() {
             </div>
 
             {editando ? (
-              <form onSubmit={handleGuardar}>
+              <form onSubmit={handleGuardar} noValidate>
                 <div className="mb-3">
                   <label className="form-label text-secondary small fw-bold">Nombre</label>
                   <input

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { esCorreoValido } from '../utils/validaciones';
+import { esCorreoValido, esNombreValido } from '../utils/validaciones';
 
 // Número de soporte técnico para el enlace directo de WhatsApp (RF7)
 const WHATSAPP_SOPORTE = '56912345678';
@@ -19,6 +19,9 @@ export default function Contacto() {
 
     const nuevosErrores = {};
     if (!formData.nombre.trim()) nuevosErrores.nombre = 'El nombre es obligatorio';
+    else if (!esNombreValido(formData.nombre)) {
+      nuevosErrores.nombre = 'El nombre solo puede tener letras, espacios, guiones o apóstrofes';
+    }
     if (!esCorreoValido(formData.correo)) nuevosErrores.correo = 'Ingresa un correo electrónico válido';
     if (formData.mensaje.trim().length < 10) nuevosErrores.mensaje = 'El mensaje debe tener al menos 10 caracteres';
 

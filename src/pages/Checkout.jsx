@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { crearOrden, obtenerUltimaOrden } from '../data/ordenes';
 import { descontarStock } from '../data/productos';
 import { obtenerRegiones, obtenerComunas } from '../data/regiones';
-import { esCorreoValido } from '../utils/validaciones';
+import { esCorreoValido, validarNombreCompleto } from '../utils/validaciones';
 import { formatearDinero } from '../utils/formato';
 
 const REGION_POR_DEFECTO = 'Región Metropolitana de Santiago';
@@ -58,6 +58,12 @@ export default function Checkout() {
     // Validación de campos requeridos
     if (!formData.nombre.trim() || !formData.apellidos.trim() || !formData.correo.trim() || !formData.calle.trim()) {
       setError('Por favor completa todos los campos obligatorios (*)');
+      return;
+    }
+
+    const errorNombre = validarNombreCompleto(formData.nombre, formData.apellidos);
+    if (errorNombre) {
+      setError(errorNombre);
       return;
     }
 

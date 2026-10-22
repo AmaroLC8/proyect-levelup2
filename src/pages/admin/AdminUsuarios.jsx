@@ -8,7 +8,7 @@ import {
 } from '../../data/usuarios';
 import { obtenerOrdenes, obtenerOrdenesPorUsuario, ordenarPorFechaDesc } from '../../data/ordenes';
 import { useAuth } from '../../context/AuthContext';
-import { esCorreoValido, esPasswordSegura, validarRegistro } from '../../utils/validaciones';
+import { esCorreoValido, esPasswordSegura, validarRegistro, validarNombreCompleto } from '../../utils/validaciones';
 import { formatearDinero, formatearFecha } from '../../utils/formato';
 import EstadoOrden from '../../components/EstadoOrden';
 
@@ -84,7 +84,8 @@ export default function AdminUsuarios() {
     if (modoModal === 'crear') {
       mensajes.push(...Object.values(validarRegistro({ ...form, confirmarPassword: form.password })));
     } else {
-      if (!form.nombre.trim() || !form.apellidos.trim()) mensajes.push('Nombre y apellidos son obligatorios');
+      const errorNombre = validarNombreCompleto(form.nombre, form.apellidos);
+      if (errorNombre) mensajes.push(errorNombre);
       if (!esCorreoValido(form.correo)) mensajes.push('Ingresa un correo electrónico válido');
       if (form.password && !esPasswordSegura(form.password)) {
         mensajes.push('La contraseña debe tener mínimo 8 caracteres, combinando letras y números');

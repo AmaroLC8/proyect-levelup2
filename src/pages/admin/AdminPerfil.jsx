@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { actualizarUsuario, obtenerUsuarioPorCorreo } from '../../data/usuarios';
-import { esCorreoValido, esPasswordSegura } from '../../utils/validaciones';
+import { esCorreoValido, esPasswordSegura, validarNombreCompleto } from '../../utils/validaciones';
 
 export default function AdminPerfil() {
   // RutaProtegidaAdmin asegura que aquí siempre hay un administrador con sesión
@@ -22,7 +22,8 @@ export default function AdminPerfil() {
 
   // Devuelve el primer error encontrado o null si los datos son válidos
   const validar = () => {
-    if (!adminData.nombre.trim() || !adminData.apellidos.trim()) return 'Nombre y apellidos son obligatorios';
+    const errorNombre = validarNombreCompleto(adminData.nombre, adminData.apellidos);
+    if (errorNombre) return errorNombre;
     if (!esCorreoValido(adminData.correo)) return 'Ingresa un correo electrónico válido';
     const otro = obtenerUsuarioPorCorreo(adminData.correo);
     if (otro && otro.id !== usuario.id) return 'Ese correo ya pertenece a otra cuenta';
