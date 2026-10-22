@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { obtenerOrdenes } from '../../data/ordenes';
 import { obtenerProductos } from '../../data/productos';
 
+
 export default function AdminDashboard() {
   const [ordenes, setOrdenes] = useState([]);
   const [productos, setProductos] = useState([]);

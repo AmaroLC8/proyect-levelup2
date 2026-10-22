@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { obtenerOrdenes } from '../../data/ordenes';
 import { obtenerProductos } from '../../data/productos';
+import { formatearDinero } from '../../utils/formatters';
+import Button from '../../components/Button';
 
 export default function AdminReportes() {
   const [ordenes, setOrdenes] = useState([]);
@@ -10,9 +12,6 @@ export default function AdminReportes() {
     setOrdenes(obtenerOrdenes() || []);
     setProductos(obtenerProductos() || []);
   }, []);
-
-  const formatearCLP = (monto) =>
-    new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(monto || 0);
 
   // 1. Cálculos de métricas clave
   const totalVentas = ordenes.reduce((acc, o) => acc + (o.total || 0), 0);
@@ -64,24 +63,31 @@ export default function AdminReportes() {
             Análisis financiero, volumen de ventas y productos más populares.
           </p>
         </div>
-        <button className="btn btn-outline-info btn-sm" onClick={() => window.print()}>
-          <i className="bi bi-printer me-2"></i>Imprimir Informe
-        </button>
+        
+        {/* Uso del componente reutilizable Button */}
+        <Button
+          variant="outline-info"
+          size="sm"
+          icon="printer"
+          onClick={() => window.print()}
+        >
+          Imprimir Informe
+        </Button>
       </div>
 
-      {/* Tarjetas KPI */}
+      {/* Tarjetas KPI usando el helper formatearDinero */}
       <div className="row g-3 mb-4">
         <div className="col-md-3">
           <div className="card bg-dark border-info shadow-sm p-3 h-100">
             <span className="text-secondary small fw-bold">INGRESOS TOTALES</span>
-            <h3 className="fw-bold text-success mt-2 mb-0">{formatearCLP(totalVentas)}</h3>
+            <h3 className="fw-bold text-success mt-2 mb-0">{formatearDinero(totalVentas)}</h3>
             <small className="text-muted mt-1">Bruto acumulado</small>
           </div>
         </div>
         <div className="col-md-3">
           <div className="card bg-dark border-secondary shadow-sm p-3 h-100">
             <span className="text-secondary small fw-bold">TICKET PROMEDIO</span>
-            <h3 className="fw-bold text-info mt-2 mb-0">{formatearCLP(ticketPromedio)}</h3>
+            <h3 className="fw-bold text-info mt-2 mb-0">{formatearDinero(ticketPromedio)}</h3>
             <small className="text-muted mt-1">Por compra realizada</small>
           </div>
         </div>
@@ -95,15 +101,14 @@ export default function AdminReportes() {
         <div className="col-md-3">
           <div className="card bg-dark border-warning shadow-sm p-3 h-100">
             <span className="text-secondary small fw-bold">DESCUENTOS DUOC / PUNTOS</span>
-            <h3 className="fw-bold text-warning mt-2 mb-0">{formatearCLP(totalDescuentos)}</h3>
+            <h3 className="fw-bold text-warning mt-2 mb-0">{formatearDinero(totalDescuentos)}</h3>
             <small className="text-muted mt-1">Ahorro clientes</small>
           </div>
         </div>
       </div>
 
-      {/* Gráficos / Tablas de Resumen */}
+      {/* Resumen por Categoría y Ranking */}
       <div className="row g-4">
-        {/* Distribución por Categoría */}
         <div className="col-md-6">
           <div className="card bg-dark border-secondary h-100 p-3">
             <h5 className="fw-bold text-info mb-3">
@@ -119,7 +124,7 @@ export default function AdminReportes() {
                     <div key={cat}>
                       <div className="d-flex justify-content-between text-light small mb-1">
                         <span className="fw-semibold">{cat}</span>
-                        <span>{formatearCLP(monto)} ({pct}%)</span>
+                        <span>{formatearDinero(monto)} ({pct}%)</span>
                       </div>
                       <div className="progress bg-secondary" style={{ height: '8px' }}>
                         <div
@@ -136,7 +141,6 @@ export default function AdminReportes() {
           </div>
         </div>
 
-        {/* Top 5 Productos Más Vendidos */}
         <div className="col-md-6">
           <div className="card bg-dark border-secondary h-100 p-3">
             <h5 className="fw-bold text-info mb-3">
@@ -164,7 +168,7 @@ export default function AdminReportes() {
                           <span className="badge bg-primary">{prod.cantidad} un.</span>
                         </td>
                         <td className="text-end fw-bold text-success">
-                          {formatearCLP(prod.total)}
+                          {formatearDinero(prod.total)}
                         </td>
                       </tr>
                     ))}
