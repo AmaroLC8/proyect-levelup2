@@ -19,27 +19,51 @@ export const CartProvider = ({ children }) => {
     localStorage.setItem('levelup_cart', JSON.stringify(carrito));
   }, [carrito]);
 
-  // Agregar al carrito
+  // Agregar al carrito validando stock
   const agregarAlCarrito = (producto) => {
+    if (producto.stock <= 0) {
+      alert(`Lo sentimos, "${producto.nombre}" no tiene stock disponible.`);
+      return;
+    }
+
     setCarrito((prev) => {
       const existe = prev.find((item) => item.id === producto.id);
       if (existe) {
+        if (existe.cantidad >= producto.stock) {
+          alert(`No puedes agregar más unidades. Stock máximo disponible: ${producto.stock}`);
+          return prev;
+        }
         return prev.map((item) =>
           item.id === producto.id ? { ...item, cantidad: item.cantidad + 1 } : item
         );
       }
-      // Se guarda el precio final para que las ofertas se cobren en el carrito
-      return [...prev, { ...producto, precio: obtenerPrecioFinal(producto), cantidad: 1 }];
+      // Se almacena precio final y se garantiza que conserve el stock
+      return [
+        ...prev,
+        {
+          ...producto,
+          precio: obtenerPrecioFinal(producto),
+          cantidad: 1,
+          stock: Number(producto.stock),
+        },
+      ];
     });
   };
 
-  // Modificar cantidad (+ / -)
+  // Modificar cantidad (+ / -) validando stock
   const modificarCantidad = (id, cambio) => {
     setCarrito((prev) =>
       prev
         .map((item) => {
           if (item.id === id) {
             const nuevaCantidad = item.cantidad + cambio;
+
+            // Validación de stock al sumar unidades
+            if (cambio > 0 && nuevaCantidad > item.stock) {
+              alert(`Solo hay ${item.stock} unidades disponibles en stock.`);
+              return item;
+            }
+
             return nuevaCantidad > 0 ? { ...item, cantidad: nuevaCantidad } : null;
           }
           return item;
@@ -61,7 +85,9 @@ export const CartProvider = ({ children }) => {
   // Cálculos automáticos: cantidad, subtotal, descuento Duoc y total a pagar
   const totalItems = carrito.reduce((acc, item) => acc + item.cantidad, 0);
   const subtotal = carrito.reduce((acc, item) => acc + item.precio * item.cantidad, 0);
-  const descuento = usuario?.descuentoDuoc ? Math.round((subtotal * PORCENTAJE_DESCUENTO_DUOC) / 100) : 0;
+  const descuento = usuario?.descuentoDuoc
+    ? Math.round((subtotal * PORCENTAJE_DESCUENTO_DUOC) / 100)
+    : 0;
   const totalMonto = subtotal - descuento;
 
   return (
