@@ -1,12 +1,10 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { obtenerBlogs } from '../data/blogs';
+import { formatearFechaLarga } from '../utils/formato';
 
 export default function Blog() {
   const blogs = obtenerBlogs();
-
-  const formatearFecha = (fecha) =>
-    new Date(`${fecha}T00:00:00`).toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' });
 
   return (
     <div className="container py-4">
@@ -46,7 +44,7 @@ export default function Blog() {
                   <span className="badge" style={{ backgroundColor: 'rgba(14, 165, 233, 0.15)', color: '#38bdf8' }}>
                     {blog.categoria}
                   </span>
-                  <span style={{ color: '#94a3b8' }}>{formatearFecha(blog.fecha)}</span>
+                  <span style={{ color: '#94a3b8' }}>{formatearFechaLarga(blog.fecha)}</span>
                 </div>
                 <h4 className="fw-bold mb-2" style={{ color: '#ffffff' }}>
                   {blog.titulo}

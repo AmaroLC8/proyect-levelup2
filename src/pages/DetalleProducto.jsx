@@ -9,14 +9,12 @@ import {
 } from '../data/productos';
 import { useCart } from '../context/CartContext';
 import ProductCard from '../components/ProductCard';
+import { formatearDinero } from '../utils/formato';
 
 export default function DetalleProducto() {
   const { id } = useParams();
   const { agregarAlCarrito } = useCart();
   const producto = obtenerProductoPorId(id);
-
-  const formatearDinero = (monto) =>
-    new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(monto);
 
   // Si el id de la URL no existe (por ejemplo, producto eliminado desde el admin)
   if (!producto) {

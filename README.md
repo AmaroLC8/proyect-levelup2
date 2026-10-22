@@ -1,32 +1,64 @@
 # Level-Up Gamer - E-Commerce Frontend (Evaluación Parcial 2) 🎮
 
-Este proyecto corresponde a la **Evaluación Parcial N° 2** de la asignatura **Desarrollo Fullstack II (DSY1104)** en Duoc UC. Consiste en la evolución y migración del sitio web hacia una **Single Page Application (SPA)** construida con **React**, implementando componentización modular, persistencia de datos local mediante operaciones CRUD, un completo panel de administración con rutas protegidas, diseño responsivo con **Bootstrap** y una suite de **pruebas unitarias** ejecutadas con reporte de cobertura.
+Este proyecto corresponde a la **Evaluación Parcial N° 2** de la asignatura **Desarrollo Fullstack II (DSY1104)** en Duoc UC. Consiste en la migración del sitio web de la Evaluación 1 a una **Single Page Application (SPA)** construida con **React**, con componentes reutilizables, datos simulados con operaciones CRUD persistidas en `localStorage`, un panel de administración con rutas protegidas, diseño responsivo con **Bootstrap** y pruebas unitarias con reporte de cobertura.
 
 ---
 
 ## 👥 Integrantes del Equipo
 
-* **Lukas Meza**
-* **Maximiliano Mella**
-* **Amaro López**
+* Lukas Meza
+* Maximiliano Mella
+* Amaro López
 
 ---
 
 ## 🚀 Tecnologías y Herramientas
 
-* **Core:** React 18 / 19
+* **Core:** React 19
 * **Tooling / Bundler:** Vite
-* **Navegación:** React Router DOM v6 / v7
-* **Diseño y Maquetación:** Bootstrap 5, Bootstrap Icons, CSS3 personalizado (Dark Neón)
-* **Gestión de Estado:** Context API (`AuthContext`, `CartContext`)
-* **Suite de Testing:** Vitest, React Testing Library, JSDOM
+* **Navegación:** React Router DOM v7
+* **Diseño y Maquetación:** Bootstrap 5, Bootstrap Icons, CSS personalizado (paleta oscura con acentos azul eléctrico)
+* **Estado global:** Context API (`AuthContext`, `CartContext`)
+* **Testing:** Vitest (sintaxis `describe` / `it` / `expect` compatible con Jasmine), React Testing Library, JSDOM
 * **Cobertura de Código:** `@vitest/coverage-v8`
+
+---
+
+## 🗺️ Vistas de la Aplicación
+
+### Tienda
+
+| Ruta | Vista |
+|---|---|
+| `/` | Home con video y productos destacados |
+| `/productos` | Catálogo con búsqueda, filtro por categoría y precio máximo |
+| `/producto/:id` | Detalle de producto y productos relacionados |
+| `/categorias` | Productos separados por categoría |
+| `/ofertas` | Productos con precio rebajado |
+| `/carrito` | Carrito con subtotal, descuento Duoc y total |
+| `/checkout` | Datos del cliente y dirección de entrega |
+| `/pago-exitoso` · `/pago-error` | Resultado del pago con resumen de la orden |
+| `/login` · `/registro` | Inicio de sesión y registro (+18 años, descuento Duoc, referidos) |
+| `/perfil` | Perfil del cliente: datos, puntos LevelUp e historial de compras |
+| `/nosotros` · `/blog` · `/blog/:id` · `/contacto` | Páginas informativas y formulario de contacto |
+
+### Administrador (solo con sesión de administrador)
+
+| Ruta | Vista |
+|---|---|
+| `/admin` | Dashboard con métricas y accesos a cada sección |
+| `/admin/ordenes` · `/admin/ordenes/:id` | Listado de órdenes y detalle de boleta |
+| `/admin/productos` | CRUD de productos y listado de stock crítico |
+| `/admin/categorias` | CRUD de categorías |
+| `/admin/usuarios` | CRUD de usuarios e historial de compras |
+| `/admin/reportes` | Ventas, ticket promedio y productos más vendidos |
+| `/admin/perfil` | Datos y contraseña del administrador |
 
 ---
 
 ## 📂 Arquitectura del Proyecto
 
-El código fuente sigue el principio de responsabilidad única (*Single Responsibility*), separando vistas, componentes reutilizables, utilitarios, lógica de datos y pruebas:
+El código sigue el principio de responsabilidad única (*Single Responsibility*), separando componentes, vistas, estado global, datos y utilidades:
 
 ```text
 proyect-levelup2/
@@ -34,88 +66,88 @@ proyect-levelup2/
 ├── src/
 │   ├── assets/                 # Imágenes de productos y video hero (ps5.mp4)
 │   ├── components/
-│   │   ├── AdminLayout.jsx     # Layout del panel de administración con sidebar
-│   │   ├── AdminSidebar.jsx    # Menú lateral navegable del administrador
-│   │   ├── Button.jsx          # Componente de botón reutilizable
-│   │   ├── Navbar.jsx          # Barra de navegación SPA reactiva al carrito
-│   │   ├── ProductCard.jsx     # Tarjeta de producto modular (Props & Events)
-│   │   ├── ResumenOrden.jsx    # Componente reutilizable para boletas y compras
-│   │   └── RutaProtegida.jsx   # Control de acceso según rol de usuario
+│   │   ├── AdminLayout.jsx     # Layout del panel con menú lateral
+│   │   ├── AdminSidebar.jsx    # Menú lateral del administrador
+│   │   ├── Button.jsx          # Botón reutilizable (+ Button.test.jsx)
+│   │   ├── EstadoOrden.jsx     # Etiqueta de estado de una orden (pagada / rechazada)
+│   │   ├── Navbar.jsx          # Barra de navegación con buscador, sesión y carrito
+│   │   ├── ProductCard.jsx     # Tarjeta de producto
+│   │   ├── ResumenOrden.jsx    # Detalle de una orden (pago y boleta del admin)
+│   │   └── RutaProtegida.jsx   # Acceso a /admin solo para administradores
 │   ├── context/
-│   │   ├── AuthContext.jsx     # Autenticación y gestión de sesión activa
-│   │   └── CartContext.jsx     # Estado global del carrito y descuentos Duoc
-│   ├── data/
-│   │   ├── blogs.js            # Publicaciones y guías para el blog
-│   │   ├── categorias.js       # Gestión de categorías de productos
-│   │   ├── ordenes.js          # Persistencia e historial de órdenes de compra
-│   │   ├── productos.js        # Base de datos simulada de productos y stock
-│   │   ├── regiones.js         # Listado de regiones y comunas de Chile
-│   │   └── usuarios.js         # Usuarios, roles, puntos LevelUp y referidos
-│   ├── pages/
-│   │   ├── admin/
-│   │   │   ├── AdminCategorias.jsx # CRUD de categorías con validación de borrado
-│   │   │   ├── AdminDashboard.jsx  # Métricas KPI y monitoreo de stock crítico
-│   │   │   ├── AdminOrdenes.jsx    # Gestión de órdenes y visualización de boleta
-│   │   │   ├── AdminPerfil.jsx     # Perfil y edición de datos del administrador
-│   │   │   ├── AdminProductos.jsx  # Gestión CRUD de inventario de productos
-│   │   │   ├── AdminReportes.jsx   # Informes de ventas y productos más vendidos
-│   │   │   ├── AdminUsuarios.jsx   # Gestión de cuentas e historial de clientes
-│   │   │   └── VerBoletaAdmin.jsx  # Vista detallada e imprimible de orden
-│   │   ├── Blog.jsx            # Artículos y guías gamer
-│   │   ├── Carrito.jsx         # Tabla interactiva de compra
-│   │   ├── Categorias.jsx      # Exploración filtrada por tarjetas de categoría
-│   │   ├── Checkout.jsx        # Captura de datos de despacho y pago
-│   │   ├── Contacto.jsx        # Formulario de contacto y soporte WhatsApp
-│   │   ├── DetalleBlog.jsx     # Lectura completa de artículo del blog
-│   │   ├── DetalleProducto.jsx # Vista detallada de producto y relacionados
-│   │   ├── Home.jsx            # Portada principal con video hero y destacados
-│   │   ├── Login.jsx           # Inicio de sesión de usuarios
-│   │   ├── Nosotros.jsx        # Misión, visión, valores y equipo
-│   │   ├── Ofertas.jsx         # Catálogo de productos con descuento
-│   │   ├── PagoError.jsx       # Vista de transacción fallida
-│   │   ├── PagoExitoso.jsx     # Comprobante de orden emitida
-│   │   ├── Perfil.jsx          # Perfil de cliente, puntos e historial
-│   │   ├── Productos.jsx       # Catálogo con buscador en tiempo real y filtros
-│   │   └── Registro.jsx        # Registro de usuarios y detección de correo Duoc
+│   │   ├── AuthContext.jsx     # Sesión: login, registro y cierre de sesión
+│   │   └── CartContext.jsx     # Carrito, subtotal y descuento Duoc
+│   ├── data/                   # Base de datos simulada con funciones CRUD sobre localStorage
+│   │   ├── blogs.js
+│   │   ├── categorias.js       # (+ categorias.test.js)
+│   │   ├── ordenes.js
+│   │   ├── productos.js
+│   │   ├── regiones.js
+│   │   └── usuarios.js
+│   ├── pages/                  # Vistas de la tienda
+│   │   └── admin/              # Vistas del panel de administración
 │   ├── test/
-│   │   ├── setup.js            # Configuración de aserciones jest-dom
-│   │   └── tienda.test.jsx     # Pruebas unitarias automatizadas
+│   │   ├── setup.js            # Configuración de jest-dom
+│   │   └── tienda.test.jsx     # Pruebas de componentes de la tienda y el admin
 │   ├── utils/
-│   │   ├── formatters.js       # Formateo de moneda CLP y fechas
-│   │   └── validaciones.js     # Validaciones de formularios y correos Duoc
-│   ├── App.jsx                 # Enrutador principal (BrowserRouter y Routes)
-│   ├── index.css               # Estilos globales y paleta Dark Neón
-│   └── main.jsx                # Punto de entrada y montaje en el DOM
-├── INFORME_COBERTURA.md        # Reporte detallado de pruebas unitarias
-├── ERS_UPDATE.md               # Matriz de especificación de requisitos
+│   │   ├── formato.js          # Formato de moneda CLP y fechas (+ formato.test.js)
+│   │   └── validaciones.js     # Reglas de correo, contraseña, edad y registro
+│   ├── App.jsx                 # Rutas de la aplicación
+│   ├── index.css               # Estilos globales
+│   └── main.jsx                # Punto de entrada
 ├── package.json
-└── vite.config.js
-
-💻 Instrucciones de Instalación y Ejecución Local
-Para levantar el proyecto en el entorno local o taller, se requiere Node.js (versión 20 o superior):
-1. Clonar el repositorio
-git clone https://github.com/AmaroLC8/proyect-levelup2.git
-cd proyect-levelup2
-
-2. Instalar las dependencias
-npm install
-
-3. Ejecutar el servidor de desarrollo
-npm run dev
-La aplicación se desplegará en http://localhost:5173/.
-
-🧪 Ejecución de Pruebas Unitarias y Cobertura
-
-# Ejecutar la suite de pruebas unitarias
-npm run test
-
-# Generar informe de cobertura de código (Coverage)
-npm run coverage
-🔑 Credenciales de Prueba
-Rol            |    Correo          |      Contraseña    |    Beneficio / Acceso
-Administrador     admin@levelup.cl          admin1234        Acceso completo al panel /admin
-Cliente Duoc      pedro@duocuc.cl           pedro1234        20% Descuento Duoc UC automático
-Cliente General   maria.gonzalez@gmail.com  user1234          Cuenta cliente estándar
+└── vite.config.js              # Configuración de Vite y Vitest
+```
 
 ---
 
+## 💻 Instalación y Ejecución Local
+
+Se requiere **Node.js 20 o superior**.
+
+```bash
+# 1. Clonar el repositorio
+git clone https://github.com/AmaroLC8/proyect-levelup2.git
+cd proyect-levelup2
+
+# 2. Instalar las dependencias
+npm install
+
+# 3. Ejecutar el servidor de desarrollo
+npm run dev
+```
+
+La aplicación queda disponible en `http://localhost:5173/`.
+
+---
+
+## 🧪 Pruebas Unitarias y Cobertura
+
+```bash
+# Ejecutar las pruebas
+npm test
+
+# Generar el reporte de cobertura (se crea en coverage/index.html)
+npm run test:coverage
+
+# Revisar el código con ESLint
+npm run lint
+```
+
+Las pruebas verifican el renderizado (normal y condicional), las props, el estado de los formularios y la simulación de eventos, según la propuesta de pruebas de la pauta.
+
+---
+
+## 🔑 Cuentas de Prueba
+
+| Rol | Correo | Contraseña | Acceso |
+|---|---|---|---|
+| Administrador | `admin@levelup.cl` | `admin1234` | Panel `/admin` completo |
+| Cliente Duoc | `pedro@duocuc.cl` | `pedro1234` | 20% de descuento automático · código de referido `LVLPEDRO` |
+
+---
+
+## 📝 Notas
+
+* **Pagos simulados:** no hay pasarela real. Si el correo del checkout contiene la palabra `error` (por ejemplo `error@test.com`), el pago se rechaza para mostrar la vista de error.
+* **Datos en el navegador:** productos, categorías, usuarios, órdenes, carrito y sesión se guardan en `localStorage`. Para volver a los datos iniciales, ejecuta `localStorage.clear()` en la consola del navegador (F12) y recarga la página.

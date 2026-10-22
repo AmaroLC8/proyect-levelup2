@@ -1,15 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
 import { obtenerProductos } from '../data/productos';
 import ProductCard from '../components/ProductCard';
 import videoHero from '../assets/ps5.mp4';
 
 export default function Home() {
-  const [productos, setProductos] = useState([]);
-
-  useEffect(() => {
-    setProductos(obtenerProductos());
-  }, []);
+  const productos = obtenerProductos();
 
   return (
     <div className="container py-4">

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { obtenerBlogPorId, obtenerBlogs } from '../data/blogs';
+import { formatearFechaLarga } from '../utils/formato';
 
 export default function DetalleBlog() {
   const { id } = useParams();
@@ -20,11 +21,7 @@ export default function DetalleBlog() {
 
   const otrosBlogs = obtenerBlogs().filter((b) => b.id !== blog.id);
 
-  const fecha = new Date(`${blog.fecha}T00:00:00`).toLocaleDateString('es-CL', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
+  const fecha = formatearFechaLarga(blog.fecha);
 
   return (
     <div className="container py-4" style={{ maxWidth: '860px' }}>

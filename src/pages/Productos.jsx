@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { obtenerProductos, obtenerPrecioFinal } from '../data/productos';
 import { obtenerCategoriasActivas } from '../data/categorias';
@@ -6,7 +6,7 @@ import ProductCard from '../components/ProductCard';
 
 export default function Productos() {
   const categorias = obtenerCategoriasActivas();
-  const [productos, setProductos] = useState([]);
+  const productos = obtenerProductos();
   const [filtroCategoria, setFiltroCategoria] = useState('Todas');
   const [precioMaximo, setPrecioMaximo] = useState('');
 
@@ -14,10 +14,6 @@ export default function Productos() {
   const [searchParams, setSearchParams] = useSearchParams();
   const busqueda = searchParams.get('buscar') ?? '';
   const setBusqueda = (texto) => setSearchParams(texto ? { buscar: texto } : {}, { replace: true });
-
-  useEffect(() => {
-    setProductos(obtenerProductos());
-  }, []);
 
   // Los productos de categorías desactivadas en el admin no se muestran en la tienda
   const nombresActivos = categorias.map((c) => c.nombre);

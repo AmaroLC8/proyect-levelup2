@@ -4,3 +4,7 @@ export const formatearDinero = (monto) =>
 
 // Formatea una fecha ISO a dd-mm-aaaa, ej: "2026-10-21T15:30:00" -> "21-10-2026"
 export const formatearFecha = (fecha) => (fecha ? new Date(fecha).toLocaleDateString('es-CL') : 'N/A');
+
+// Fecha con el mes escrito, ej: "2026-10-02" -> "2 de octubre de 2026" (usada en el blog)
+export const formatearFechaLarga = (fecha) =>
+  new Date(`${fecha}T00:00:00`).toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' });

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { formatearDinero, formatearFecha } from './formatters';
+import { formatearDinero, formatearFecha, formatearFechaLarga } from './formato';
 
-describe('Pruebas unitarias en formatters.js', () => {
+describe('Pruebas unitarias en formato.js', () => {
   describe('formatearDinero', () => {
     it('debe formatear un número correctamente a pesos chilenos (CLP)', () => {
       const resultado = formatearDinero(15000);
@@ -13,7 +13,7 @@ describe('Pruebas unitarias en formatters.js', () => {
     it('debe retornar $0 si se pasa 0 o un valor nulo', () => {
       const resultadoZero = formatearDinero(0).replace(/\s/g, ' ');
       const resultadoNull = formatearDinero(null).replace(/\s/g, ' ');
-      
+
       expect(resultadoZero).toContain('0');
       expect(resultadoNull).toContain('0');
     });
@@ -29,6 +29,12 @@ describe('Pruebas unitarias en formatters.js', () => {
     it('debe retornar "N/A" si la fecha es nula o indefinida', () => {
       expect(formatearFecha(null)).toBe('N/A');
       expect(formatearFecha(undefined)).toBe('N/A');
+    });
+  });
+
+  describe('formatearFechaLarga', () => {
+    it('debe escribir el mes en palabras', () => {
+      expect(formatearFechaLarga('2026-10-02')).toBe('2 de octubre de 2026');
     });
   });
 });

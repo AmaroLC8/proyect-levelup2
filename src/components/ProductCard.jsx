@@ -2,13 +2,11 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { esOferta, obtenerPrecioFinal, obtenerPorcentajeDescuento } from '../data/productos';
+import { formatearDinero } from '../utils/formato';
 
 export default function ProductCard({ producto }) {
   const { agregarAlCarrito } = useCart();
   const enOferta = esOferta(producto);
-
-  const formatearDinero = (monto) =>
-    new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(monto);
 
   return (
     <div
