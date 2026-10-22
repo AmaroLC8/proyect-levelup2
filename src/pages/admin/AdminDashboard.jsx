@@ -1,114 +1,190 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { obtenerProductos, obtenerProductosCriticos } from '../../data/productos';
+import { obtenerOrdenes } from '../../data/ordenes';
+import { obtenerProductos } from '../../data/productos';
 
 export default function AdminDashboard() {
+  const [ordenes, setOrdenes] = useState([]);
   const [productos, setProductos] = useState([]);
-  const [criticos, setCriticos] = useState([]);
 
   useEffect(() => {
-    setProductos(obtenerProductos());
-    setCriticos(obtenerProductosCriticos());
+    // Cargamos la información real acumulada en la aplicación
+    const listaOrdenes = obtenerOrdenes() || [];
+    const listaProductos = obtenerProductos() || [];
+
+    setOrdenes(listaOrdenes);
+    setProductos(listaProductos);
   }, []);
 
+  // 1. Cálculo de Métricas Clave
+  const totalVentas = ordenes.reduce((acc, ord) => acc + (ord.total || 0), 0);
+  const totalOrdenes = ordenes.length;
+  const totalProductos = productos.length;
+  const productosStockCritico = productos.filter((p) => (p.stock ?? 0) <= 5);
+
+  // Formateador de moneda CLP
+  const formatearCLP = (monto) =>
+    new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(monto || 0);
+
   return (
-    <div className="container-fluid my-4 px-4">
-      <div className="d-flex justify-content-between align-items-center mb-4 pb-2 border-bottom border-secondary">
-        <div>
-          <h2 className="text-info fw-bold mb-0">
-            <i className="bi bi-speedometer2 me-2"></i>Panel de Administración
-          </h2>
-          <small className="text-secondary">Resumen general y métricas del sistema Level-Up Gamer</small>
-        </div>
-        <Link to="/admin/productos" className="btn btn-primary fw-bold">
-          <i className="bi bi-box-seam me-2"></i>Gestionar Inventario
-        </Link>
+    <div className="container-fluid text-light">
+      {/* Título de la vista */}
+      <div className="mb-4">
+        <h2 className="fw-bold text-info mb-1">
+          <i className="bi bi-speedometer2 me-2"></i>Dashboard Principal
+        </h2>
+        <p className="text-secondary">
+          Métricas clave en tiempo real y resumen operativo de Level-Up Gamer.
+        </p>
       </div>
 
-      {/* Tarjetas de Métricas (Inspiradas en Figura 9) */}
-      <div className="row g-4 mb-5">
-        <div className="col-12 col-md-4">
-          <div className="card bg-primary text-white p-3 shadow-sm border-0">
+      {/* Tarjetas de Métricas (KPIs) */}
+      <div className="row g-3 mb-4">
+        {/* KPI 1: Ventas Totales */}
+        <div className="col-md-3">
+          <div className="card bg-dark border-info shadow-sm h-100 p-3">
             <div className="d-flex justify-content-between align-items-center">
               <div>
-                <h6 className="text-uppercase small mb-1">Órdenes Realizadas</h6>
-                <h2 className="fw-bold mb-0">1,234</h2>
-                <small className="text-light opacity-75">+20% esta semana</small>
+                <span className="text-secondary small fw-semibold">VENTAS TOTALES</span>
+                <h3 className="fw-bold text-success mb-0">{formatearCLP(totalVentas)}</h3>
               </div>
-              <i className="bi bi-cart-check fs-1 opacity-50"></i>
+              <div className="bg-success bg-opacity-10 text-success p-3 rounded-circle fs-3">
+                <i className="bi bi-currency-dollar"></i>
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="col-12 col-md-4">
-          <div className="card bg-success text-white p-3 shadow-sm border-0">
+        {/* KPI 2: Total Órdenes */}
+        <div className="col-md-3">
+          <div className="card bg-dark border-secondary shadow-sm h-100 p-3">
             <div className="d-flex justify-content-between align-items-center">
               <div>
-                <h6 className="text-uppercase small mb-1">Total Productos</h6>
-                <h2 className="fw-bold mb-0">{productos.length}</h2>
-                <small className="text-light opacity-75">En catálogo activo</small>
+                <span className="text-secondary small fw-semibold">ÓRDENEN REALIZADAS</span>
+                <h3 className="fw-bold text-light mb-0">{totalOrdenes}</h3>
               </div>
-              <i className="bi bi-boxes fs-1 opacity-50"></i>
+              <div className="bg-info bg-opacity-10 text-info p-3 rounded-circle fs-3">
+                <i className="bi bi-receipt"></i>
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="col-12 col-md-4">
-          <div className="card bg-danger text-white p-3 shadow-sm border-0">
+        {/* KPI 3: Productos en Catálogo */}
+        <div className="col-md-3">
+          <div className="card bg-dark border-secondary shadow-sm h-100 p-3">
             <div className="d-flex justify-content-between align-items-center">
               <div>
-                <h6 className="text-uppercase small mb-1">Stock Crítico</h6>
-                <h2 className="fw-bold mb-0">{criticos.length}</h2>
-                <small className="text-light opacity-75">Requieren reposición urgente</small>
+                <span className="text-secondary small fw-semibold">PRODUCTOS EN CATALOGO</span>
+                <h3 className="fw-bold text-light mb-0">{totalProductos}</h3>
               </div>
-              <i className="bi bi-exclamation-triangle fs-1 opacity-50"></i>
+              <div className="bg-primary bg-opacity-10 text-primary p-3 rounded-circle fs-3">
+                <i className="bi bi-box-seam"></i>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* KPI 4: Stock Crítico */}
+        <div className="col-md-3">
+          <div className="card bg-dark border-warning shadow-sm h-100 p-3">
+            <div className="d-flex justify-content-between align-items-center">
+              <div>
+                <span className="text-secondary small fw-semibold">STOCK CRÍTICO</span>
+                <h3 className="fw-bold text-warning mb-0">{productosStockCritico.length}</h3>
+              </div>
+              <div className="bg-warning bg-opacity-10 text-warning p-3 rounded-circle fs-3">
+                <i className="bi bi-exclamation-triangle"></i>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Listado de Productos Críticos (Requerimiento explícito del flujo admin) */}
-      <div className="card shadow-sm border-secondary mb-4">
-        <div className="card-header bg-dark border-secondary d-flex justify-content-between align-items-center py-3">
-          <h5 className="text-warning fw-bold mb-0">
-            <i className="bi bi-bell-fill me-2"></i>Alertas de Inventario (Stock Crítico)
-          </h5>
-          <span className="badge bg-danger">{criticos.length} Productos</span>
-        </div>
-        <div className="card-body p-0">
-          <div className="table-responsive">
-            <table className="table table-dark table-hover align-middle mb-0">
-              <thead>
-                <tr className="text-secondary small">
-                  <th>Producto</th>
-                  <th>Categoría</th>
-                  <th>Stock Actual</th>
-                  <th>Umbral Crítico</th>
-                  <th>Estado</th>
-                </tr>
-              </thead>
-              <tbody>
-                {criticos.length > 0 ? (
-                  criticos.map((item) => (
-                    <tr key={item.id}>
-                      <td className="fw-bold text-light">{item.nombre}</td>
-                      <td>{item.categoria}</td>
-                      <td className="text-danger fw-bold fs-5">{item.stock} u.</td>
-                      <td className="text-secondary">{item.stockCritico} u.</td>
-                      <td>
-                        <span className="badge bg-danger">Bajo Stock</span>
+      {/* Tablas Resumen: Últimas Órdenes y Stock Crítico */}
+      <div className="row g-4">
+        {/* Tabla: Últimas Órdenes */}
+        <div className="col-lg-7">
+          <div className="card bg-dark border-secondary h-100">
+            <div className="card-header bg-dark border-secondary d-flex justify-content-between align-items-center py-3">
+              <h5 className="fw-bold text-info mb-0">
+                <i className="bi bi-clock-history me-2"></i>Últimas Órdenes
+              </h5>
+              <Link to="/admin/ordenes" className="btn btn-sm btn-outline-info">
+                Ver todas
+              </Link>
+            </div>
+            <div className="table-responsive">
+              <table className="table table-dark table-hover align-middle mb-0">
+                <thead>
+                  <tr className="text-secondary small border-bottom border-secondary">
+                    <th>N° Orden</th>
+                    <th>Cliente</th>
+                    <th>Total</th>
+                    <th className="text-center">Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ordenes.length === 0 ? (
+                    <tr>
+                      <td colSpan="4" className="text-center py-4 text-muted">
+                        No hay compras registradas aún.
                       </td>
                     </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan="5" className="text-center py-4 text-secondary">
-                      No hay productos con stock crítico en este momento.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                  ) : (
+                    ordenes.slice(0, 5).map((ord) => (
+                      <tr key={ord.id || ord.numeroOrden}>
+                        <td className="fw-bold text-info">#{ord.id || ord.numeroOrden}</td>
+                        <td>{ord.cliente?.nombre || ord.nombreCliente || 'Cliente'}</td>
+                        <td className="fw-bold text-success">{formatearCLP(ord.total)}</td>
+                        <td className="text-center">
+                          <span className="badge bg-success">Completada</span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        {/* Alerta: Productos con Bajo Stock */}
+        <div className="col-lg-5">
+          <div className="card bg-dark border-secondary h-100">
+            <div className="card-header bg-dark border-secondary d-flex justify-content-between align-items-center py-3">
+              <h5 className="fw-bold text-warning mb-0">
+                <i className="bi bi-exclamation-circle me-2"></i>Bajo Inventario (≤ 5)
+              </h5>
+              <Link to="/admin/productos" className="btn btn-sm btn-outline-warning">
+                Gestionar
+              </Link>
+            </div>
+            <div className="card-body p-0">
+              {productosStockCritico.length === 0 ? (
+                <div className="p-4 text-center text-muted">
+                  <i className="bi bi-check-circle fs-2 d-block mb-2 text-success"></i>
+                  Inventario en niveles óptimos.
+                </div>
+              ) : (
+                <ul className="list-group list-group-flush">
+                  {productosStockCritico.map((prod) => (
+                    <li
+                      key={prod.id}
+                      className="list-group-item bg-dark text-light border-secondary d-flex justify-content-between align-items-center"
+                    >
+                      <div>
+                        <span className="fw-semibold d-block">{prod.nombre || prod.titulo}</span>
+                        <small className="text-secondary">Categoría: {prod.categoria || 'Gamer'}</small>
+                      </div>
+                      <span className="badge bg-danger fs-6 px-2 py-1">
+                        Stock: {prod.stock}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
         </div>
       </div>
