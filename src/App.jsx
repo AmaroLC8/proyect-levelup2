@@ -1,29 +1,45 @@
-import React from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { CartProvider } from './context/CartContext';
-import { AuthProvider } from './context/AuthContext';
-import Navbar from './components/Navbar';
+import React from "react";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 
-// Páginas de la tienda
-import Home from './pages/Home';
-import Productos from './pages/Productos';
-import DetalleProducto from './pages/DetalleProducto';
-import Categorias from './pages/Categorias';
-import Ofertas from './pages/Ofertas';
-import Login from './pages/Login';
-import Registro from './pages/Registro';
-import Nosotros from './pages/Nosotros';
-import Blog from './pages/Blog';
-import DetalleBlog from './pages/DetalleBlog';
-import Contacto from './pages/Contacto';
-import Carrito from './pages/Carrito';
-import Checkout from './pages/Checkout';
-import PagoExitoso from './pages/PagoExitoso';
-import PagoError from './pages/PagoError';
+// Contextos
+import { AuthProvider } from "./context/AuthContext";
+import { CartProvider } from "./context/CartContext";
 
-// Panel de Administración
-import AdminDashboard from './pages/admin/AdminDashboard';
-import AdminProductos from './pages/admin/AdminProductos';
+// Componentes generales
+import Navbar from "./components/Navbar";
+import RutaProtegidaAdmin from "./components/RutaProtegida";
+import AdminLayout from "./components/AdminLayout";
+
+// Páginas Públicas
+import Home from "./pages/Home";
+import Productos from "./pages/Productos";
+import DetalleProducto from "./pages/DetalleProducto";
+import Categorias from "./pages/Categorias";
+import Ofertas from "./pages/Ofertas";
+import Login from "./pages/Login";
+import Registro from "./pages/Registro";
+import Nosotros from "./pages/Nosotros";
+import Blog from "./pages/Blog";
+import DetalleBlog from "./pages/DetalleBlog";
+import Contacto from "./pages/Contacto";
+import Carrito from "./pages/Carrito";
+import Checkout from "./pages/Checkout";
+import PagoExitoso from "./pages/PagoExitoso";
+import PagoError from "./pages/PagoError";
+
+// Páginas Administrador (Solo importamos los archivos que YA existen)
+import AdminDashboard from "./pages/admin/AdminDashboard";
+import AdminProductos from "./pages/admin/AdminProductos";
+
+// Componente auxiliar para secciones en desarrollo
+const EnConstruccion = ({ titulo }) => (
+  <div className="text-light p-5 text-center">
+    <h3 className="text-info mb-3">{titulo}</h3>
+    <p className="text-secondary">
+      Esta sección se implementará en los siguientes puntos.
+    </p>
+  </div>
+);
 
 export default function App() {
   return (
@@ -52,18 +68,35 @@ export default function App() {
                 <Route path="/pago-exitoso" element={<PagoExitoso />} />
                 <Route path="/pago-error" element={<PagoError />} />
 
-                {/* Rutas del Panel Administrador */}
-                <Route path="/admin" element={<AdminDashboard />} />
-                <Route path="/admin/productos" element={<AdminProductos />} />
+                {/* Rutas Protegidas del Panel Administrador */}
+                <Route element={<RutaProtegidaAdmin />}>
+                  <Route path="/admin" element={<AdminLayout />}>
+                    <Route index element={<AdminDashboard />} />
+                    <Route
+                      path="ordenes"
+                      element={<EnConstruccion titulo="Gestión de Órdenes y Boletas" />}
+                    />
+                    <Route path="productos" element={<AdminProductos />} />
+                    <Route
+                      path="categorias"
+                      element={<EnConstruccion titulo="Gestión de Categorías" />}
+                    />
+                    <Route
+                      path="usuarios"
+                      element={<EnConstruccion titulo="Gestión de Usuarios" />}
+                    />
+                    <Route
+                      path="reportes"
+                      element={<EnConstruccion titulo="Reportes y Ventas" />}
+                    />
+                    <Route
+                      path="perfil"
+                      element={<EnConstruccion titulo="Perfil de Administrador" />}
+                    />
+                  </Route>
+                </Route>
               </Routes>
             </main>
-
-            <footer className="py-4 text-center text-secondary border-top border-secondary mt-5" style={{ backgroundColor: '#0b0d14' }}>
-              <div className="container">
-                <p className="mb-1 text-light fw-bold">LEVEL-UP GAMER © 2026 - Duoc UC</p>
-                <small>Desarrollo Fullstack II - Evaluación Parcial N° 2</small>
-              </div>
-            </footer>
           </div>
         </BrowserRouter>
       </CartProvider>
