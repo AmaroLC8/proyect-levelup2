@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatearDinero, formatearFecha, formatearFechaLarga } from './formato';
+import { formatearDinero, formatearFecha, formatearFechaLarga } from '../utils/formato';
 
 describe('Pruebas unitarias en formato.js', () => {
   describe('formatearDinero', () => {

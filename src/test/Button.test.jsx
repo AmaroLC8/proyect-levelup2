@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
-import Button from './Button';
+import Button from '../components/Button';
 
 describe('Pruebas unitarias en el componente Button.jsx', () => {
   it('debe renderizar el texto del botón correctamente', () => {
