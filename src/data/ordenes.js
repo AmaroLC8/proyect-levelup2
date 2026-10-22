@@ -68,6 +68,13 @@ export const obtenerOrdenesPorUsuario = (usuarioId) => {
   return ordenes.filter((o) => o.usuarioId === Number(usuarioId));
 };
 
+// Las rechazadas no cuentan como ventas en el dashboard ni en los reportes
+export const obtenerOrdenesPagadas = () => obtenerOrdenes().filter((o) => o.estado === 'pagada');
+
+// De la más reciente a la más antigua
+export const ordenarPorFechaDesc = (ordenes) =>
+  [...ordenes].sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+
 export const obtenerUltimaOrden = () => {
   const ordenes = obtenerOrdenes();
   return ordenes[ordenes.length - 1] ?? null;

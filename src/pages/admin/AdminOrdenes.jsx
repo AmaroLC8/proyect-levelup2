@@ -1,28 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { obtenerOrdenes } from '../../data/ordenes';
+import { obtenerOrdenes, ordenarPorFechaDesc } from '../../data/ordenes';
+import { formatearDinero, formatearFecha } from '../../utils/formato';
+import EstadoOrden from '../../components/EstadoOrden';
 
 export default function AdminOrdenes() {
-  const [ordenes, setOrdenes] = useState([]);
+  const [ordenes] = useState(() => ordenarPorFechaDesc(obtenerOrdenes()));
   const [filtroEstado, setFiltroEstado] = useState('todas');
 
-  useEffect(() => {
-    // Carga las órdenes desde la capa de datos
-    const lista = obtenerOrdenes();
-    setOrdenes(lista || []);
-  }, []);
-
-  const ordenesFiltradas = ordenes.filter((o) => {
-    if (filtroEstado === 'todas') return true;
-    return o.estado?.toLowerCase() === filtroEstado.toLowerCase();
-  });
-
-  const formatearCLP = (monto) =>
-    new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(monto || 0);
+  const ordenesFiltradas = ordenes.filter(
+    (o) => filtroEstado === 'todas' || o.estado === filtroEstado
+  );
 
   return (
     <div className="container-fluid text-light">
-      <div className="d-flex justify-content-between align-items-center mb-4">
+      <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
         <div>
           <h2 className="fw-bold text-info mb-1">
             <i className="bi bi-receipt me-2"></i>Gestión de Órdenes y Boletas
@@ -40,18 +32,18 @@ export default function AdminOrdenes() {
       <div className="card bg-dark border-secondary mb-4 p-3">
         <div className="row g-3 align-items-center">
           <div className="col-auto">
-            <label className="fw-semibold text-secondary">Filtrar por estado:</label>
+            <label htmlFor="filtroEstado" className="fw-semibold text-secondary">Filtrar por estado:</label>
           </div>
           <div className="col-auto">
             <select
+              id="filtroEstado"
               className="form-select bg-dark text-light border-secondary"
               value={filtroEstado}
               onChange={(e) => setFiltroEstado(e.target.value)}
             >
               <option value="todas">Todas las órdenes</option>
-              <option value="completada">Completadas</option>
-              <option value="pendiente">Pendientes</option>
-              <option value="cancelada">Canceladas</option>
+              <option value="pagada">Pagadas</option>
+              <option value="rechazada">Rechazadas</option>
             </select>
           </div>
         </div>
@@ -66,7 +58,7 @@ export default function AdminOrdenes() {
                 <th>N° Orden</th>
                 <th>Fecha</th>
                 <th>Cliente</th>
-                <th>Email</th>
+                <th>Correo</th>
                 <th>Total</th>
                 <th>Estado</th>
                 <th className="text-center">Acciones</th>
@@ -75,34 +67,22 @@ export default function AdminOrdenes() {
             <tbody>
               {ordenesFiltradas.length === 0 ? (
                 <tr>
-                  <td colSpan="7" className="text-center py-4 text-muted">
+                  <td colSpan="7" className="text-center py-4 text-secondary">
                     No hay órdenes registradas con este criterio.
                   </td>
                 </tr>
               ) : (
                 ordenesFiltradas.map((ord) => (
-                  <tr key={ord.id || ord.numeroOrden}>
-                    <td className="fw-bold text-info">#{ord.id || ord.numeroOrden}</td>
-                    <td>{ord.fecha ? new Date(ord.fecha).toLocaleDateString('es-CL') : 'N/A'}</td>
-                    <td>{ord.cliente?.nombre || ord.nombreCliente || 'Cliente'}</td>
-                    <td className="small text-secondary">{ord.cliente?.email || ord.email || 'N/A'}</td>
-                    <td className="fw-bold text-success">{formatearCLP(ord.total)}</td>
-                    <td>
-                      <span
-                        className={`badge ${
-                          ord.estado?.toLowerCase() === 'completada'
-                            ? 'bg-success'
-                            : ord.estado?.toLowerCase() === 'pendiente'
-                            ? 'bg-warning text-dark'
-                            : 'bg-secondary'
-                        }`}
-                      >
-                        {ord.estado || 'Completada'}
-                      </span>
-                    </td>
+                  <tr key={ord.id}>
+                    <td className="fw-bold text-info">#{ord.numeroOrden}</td>
+                    <td>{formatearFecha(ord.fecha)}</td>
+                    <td>{ord.cliente.nombre} {ord.cliente.apellidos}</td>
+                    <td className="small text-secondary">{ord.cliente.correo}</td>
+                    <td className="fw-bold text-success">{formatearDinero(ord.total)}</td>
+                    <td><EstadoOrden estado={ord.estado} /></td>
                     <td className="text-center">
                       <Link
-                        to={`/admin/ordenes/${ord.id || ord.numeroOrden}`}
+                        to={`/admin/ordenes/${ord.id}`}
                         className="btn btn-sm btn-outline-info d-inline-flex align-items-center gap-1"
                       >
                         <i className="bi bi-eye"></i> Ver Boleta
