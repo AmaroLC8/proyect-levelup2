@@ -1,39 +1,42 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   obtenerUsuarios,
+  obtenerUsuarioPorCorreo,
   crearUsuario,
   actualizarUsuario,
   eliminarUsuario
 } from '../../data/usuarios';
-import { obtenerOrdenes, obtenerOrdenesPorUsuario } from '../../data/ordenes';
+import { obtenerOrdenes, obtenerOrdenesPorUsuario, ordenarPorFechaDesc } from '../../data/ordenes';
+import { useAuth } from '../../context/AuthContext';
+import { esCorreoValido, esPasswordSegura, validarRegistro } from '../../utils/validaciones';
+import { formatearDinero, formatearFecha } from '../../utils/formato';
+import EstadoOrden from '../../components/EstadoOrden';
 
 export default function AdminUsuarios() {
-  const [usuarios, setUsuarios] = useState([]);
-  const [ordenes, setOrdenes] = useState([]);
+  const { usuario: adminActual } = useAuth();
+  const [usuarios, setUsuarios] = useState(() => obtenerUsuarios());
+  const [ordenes] = useState(() => obtenerOrdenes());
   const [busqueda, setBusqueda] = useState('');
   const [filtroRol, setFiltroRol] = useState('todos');
   const [modoModal, setModoModal] = useState(null); // 'crear' | 'editar' | 'ver' | null
   const [usuarioSel, setUsuarioSel] = useState(null);
+  const [errores, setErrores] = useState([]);
+  const [errorTabla, setErrorTabla] = useState('');
 
-  // Estado del formulario adaptado a tu usuarios.js
+  // Estado del formulario adaptado a usuarios.js
   const [form, setForm] = useState({
     id: null,
     nombre: '',
     apellidos: '',
     correo: '',
     password: '',
-    fechaNacimiento: '2000-01-01',
+    fechaNacimiento: '',
     rol: 'cliente'
   });
 
-  const cargarDatos = () => {
-    setUsuarios(obtenerUsuarios() || []);
-    setOrdenes(obtenerOrdenes() || []);
-  };
+  const cargarDatos = () => setUsuarios(obtenerUsuarios());
 
-  useEffect(() => {
-    cargarDatos();
-  }, []);
+  const esUsuarioActual = (user) => user?.id === adminActual?.id;
 
   const handleAbrirCrear = () => {
     setForm({
@@ -41,10 +44,11 @@ export default function AdminUsuarios() {
       nombre: '',
       apellidos: '',
       correo: '',
-      password: 'user1234',
-      fechaNacimiento: '2000-01-01',
+      password: '',
+      fechaNacimiento: '',
       rol: 'cliente'
     });
+    setErrores([]);
     setModoModal('crear');
   };
 
@@ -55,10 +59,12 @@ export default function AdminUsuarios() {
       nombre: user.nombre || '',
       apellidos: user.apellidos || '',
       correo: user.correo || '',
-      password: user.password || '12345678',
-      fechaNacimiento: user.fechaNacimiento || '2000-01-01',
+      // Vacía: solo se cambia la contraseña si el admin escribe una nueva
+      password: '',
+      fechaNacimiento: user.fechaNacimiento || '',
       rol: user.rol || 'cliente'
     });
+    setErrores([]);
     setModoModal('editar');
   };
 
@@ -72,13 +78,37 @@ export default function AdminUsuarios() {
     setUsuarioSel(null);
   };
 
+  // Mismas reglas que el registro de la tienda (RF1 y ERS 3.3.2), más correo único
+  const validarFormulario = () => {
+    const mensajes = [];
+    if (modoModal === 'crear') {
+      mensajes.push(...Object.values(validarRegistro({ ...form, confirmarPassword: form.password })));
+    } else {
+      if (!form.nombre.trim() || !form.apellidos.trim()) mensajes.push('Nombre y apellidos son obligatorios');
+      if (!esCorreoValido(form.correo)) mensajes.push('Ingresa un correo electrónico válido');
+      if (form.password && !esPasswordSegura(form.password)) {
+        mensajes.push('La contraseña debe tener mínimo 8 caracteres, combinando letras y números');
+      }
+    }
+    const existente = esCorreoValido(form.correo) ? obtenerUsuarioPorCorreo(form.correo) : null;
+    if (existente && existente.id !== form.id) mensajes.push('Ya existe un usuario con ese correo');
+    if (esUsuarioActual(form) && form.rol !== 'admin') {
+      mensajes.push('No puedes quitarte el rol de administrador a ti mismo');
+    }
+    return mensajes;
+  };
+
   const handleGuardar = (e) => {
     e.preventDefault();
 
+    const mensajes = validarFormulario();
+    setErrores(mensajes);
+    if (mensajes.length > 0) return;
+
     if (modoModal === 'crear') {
       crearUsuario({
-        nombre: form.nombre,
-        apellidos: form.apellidos,
+        nombre: form.nombre.trim(),
+        apellidos: form.apellidos.trim(),
         correo: form.correo,
         password: form.password,
         fechaNacimiento: form.fechaNacimiento,
@@ -86,10 +116,11 @@ export default function AdminUsuarios() {
       });
     } else if (modoModal === 'editar') {
       actualizarUsuario(form.id, {
-        nombre: form.nombre,
-        apellidos: form.apellidos,
-        correo: form.correo,
-        rol: form.rol
+        nombre: form.nombre.trim(),
+        apellidos: form.apellidos.trim(),
+        correo: form.correo.trim().toLowerCase(),
+        rol: form.rol,
+        ...(form.password && { password: form.password })
       });
     }
 
@@ -97,9 +128,14 @@ export default function AdminUsuarios() {
     handleCerrarModal();
   };
 
-  const handleEliminar = (idUser) => {
+  const handleEliminar = (user) => {
+    if (esUsuarioActual(user)) {
+      setErrorTabla('No puedes eliminar tu propia cuenta mientras tienes la sesión iniciada');
+      return;
+    }
     if (window.confirm('¿Estás seguro de eliminar este usuario?')) {
-      eliminarUsuario(idUser);
+      eliminarUsuario(user.id);
+      setErrorTabla('');
       cargarDatos();
     }
   };
@@ -108,9 +144,10 @@ export default function AdminUsuarios() {
   const obtenerComprasDeUsuario = (user) => {
     if (!user) return [];
     const porId = obtenerOrdenesPorUsuario(user.id);
-    if (porId.length > 0) return porId;
-    return ordenes.filter(
-      (ord) => (ord.cliente?.correo || '').toLowerCase() === (user.correo || '').toLowerCase()
+    if (porId.length > 0) return ordenarPorFechaDesc(porId);
+    // Compras hechas como visitante con el mismo correo
+    return ordenarPorFechaDesc(
+      ordenes.filter((ord) => ord.cliente.correo.toLowerCase() === user.correo.toLowerCase())
     );
   };
 
@@ -125,9 +162,6 @@ export default function AdminUsuarios() {
 
     return coincideTexto && coincideRol;
   });
-
-  const formatearCLP = (monto) =>
-    new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(monto || 0);
 
   return (
     <div className="container-fluid text-light">
@@ -180,6 +214,13 @@ export default function AdminUsuarios() {
           </div>
         </div>
       </div>
+
+      {errorTabla && (
+        <div className="alert alert-danger py-2 d-flex justify-content-between align-items-center">
+          {errorTabla}
+          <button type="button" className="btn-close" aria-label="Cerrar" onClick={() => setErrorTabla('')}></button>
+        </div>
+      )}
 
       {/* Tabla de Usuarios */}
       <div className="card bg-dark border-secondary shadow-sm">
@@ -253,7 +294,7 @@ export default function AdminUsuarios() {
                           <button
                             className="btn btn-outline-danger"
                             title="Eliminar"
-                            onClick={() => handleEliminar(u.id)}
+                            onClick={() => handleEliminar(u)}
                           >
                             <i className="bi bi-trash"></i>
                           </button>
@@ -310,21 +351,21 @@ export default function AdminUsuarios() {
                             <th>N° Orden</th>
                             <th>Fecha</th>
                             <th>Productos</th>
-                            <th className="text-end">Total Pagado</th>
+                            <th>Estado</th>
+                            <th className="text-end">Total</th>
                           </tr>
                         </thead>
                         <tbody>
                           {obtenerComprasDeUsuario(usuarioSel).map((ord) => (
-                            <tr key={ord.id || ord.numeroOrden}>
-                              <td className="fw-bold text-info">#{ord.id || ord.numeroOrden}</td>
+                            <tr key={ord.id}>
+                              <td className="fw-bold text-info">#{ord.numeroOrden}</td>
+                              <td className="small">{formatearFecha(ord.fecha)}</td>
                               <td className="small">
-                                {ord.fecha ? new Date(ord.fecha).toLocaleDateString('es-CL') : 'N/A'}
+                                {ord.items.map((i) => `${i.nombre} (x${i.cantidad})`).join(', ')}
                               </td>
-                              <td className="small">
-                                {(ord.items || []).map((i) => `${i.nombre || i.titulo} (x${i.cantidad})`).join(', ')}
-                              </td>
+                              <td><EstadoOrden estado={ord.estado} /></td>
                               <td className="text-end fw-bold text-success">
-                                {formatearCLP(ord.total)}
+                                {formatearDinero(ord.total)}
                               </td>
                             </tr>
                           ))}
@@ -334,8 +375,15 @@ export default function AdminUsuarios() {
                   )}
                 </div>
               ) : (
-                <form onSubmit={handleGuardar}>
+                <form onSubmit={handleGuardar} noValidate>
                   <div className="modal-body">
+                    {errores.length > 0 && (
+                      <div className="alert alert-danger py-2">
+                        <ul className="mb-0 ps-3">
+                          {errores.map((msg) => <li key={msg}>{msg}</li>)}
+                        </ul>
+                      </div>
+                    )}
                     <div className="row g-3">
                       <div className="col-md-6">
                         <label className="form-label text-secondary small fw-bold">Nombre</label>
@@ -378,18 +426,20 @@ export default function AdminUsuarios() {
                           <option value="admin">Administrador</option>
                         </select>
                       </div>
+                      <div className="col-md-6">
+                        <label className="form-label text-secondary small fw-bold">
+                          {modoModal === 'crear' ? 'Contraseña' : 'Nueva contraseña (opcional)'}
+                        </label>
+                        <input
+                          type="password"
+                          className="form-control bg-dark text-light border-secondary"
+                          value={form.password}
+                          placeholder={modoModal === 'crear' ? 'Mín. 8 caracteres, letras y números' : 'Déjala vacía para no cambiarla'}
+                          onChange={(e) => setForm({ ...form, password: e.target.value })}
+                        />
+                      </div>
                       {modoModal === 'crear' && (
                         <>
-                          <div className="col-md-6">
-                            <label className="form-label text-secondary small fw-bold">Contraseña</label>
-                            <input
-                              type="password"
-                              className="form-control bg-dark text-light border-secondary"
-                              required
-                              value={form.password}
-                              onChange={(e) => setForm({ ...form, password: e.target.value })}
-                            />
-                          </div>
                           <div className="col-md-6">
                             <label className="form-label text-secondary small fw-bold">Fecha de Nacimiento</label>
                             <input
