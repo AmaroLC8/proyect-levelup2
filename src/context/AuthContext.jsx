@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, startTransition } from 'react';
 import {
   obtenerUsuarioPorId,
   obtenerUsuarioPorCorreo,
@@ -19,6 +19,10 @@ export const AuthProvider = ({ children }) => {
   });
 
   const usuario = usuarioId ? obtenerUsuarioPorId(usuarioId) ?? null : null;
+
+  // Fuerza un nuevo render para que la Navbar y las vistas lean los datos editados del perfil
+  const [, setVersion] = useState(0);
+  const refrescarUsuario = () => setVersion((v) => v + 1);
 
   const abrirSesion = (id) => {
     localStorage.setItem(SESION_KEY, String(id));
@@ -58,9 +62,11 @@ export const AuthProvider = ({ children }) => {
     return { ok: true, usuario: nuevo };
   };
 
+  // En transición para que se aplique junto con la navegación de React Router;
+  // si no, al salir desde /admin la ruta protegida alcanza a redirigir a /login
   const cerrarSesion = () => {
     localStorage.removeItem(SESION_KEY);
-    setUsuarioId(null);
+    startTransition(() => setUsuarioId(null));
   };
 
   return (
@@ -71,6 +77,7 @@ export const AuthProvider = ({ children }) => {
         iniciarSesion,
         registrar,
         cerrarSesion,
+        refrescarUsuario,
       }}
     >
       {children}

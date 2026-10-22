@@ -1,41 +1,57 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { obtenerUsuarios, actualizarUsuario } from '../../data/usuarios';
+import { actualizarUsuario, obtenerUsuarioPorCorreo } from '../../data/usuarios';
+import { esCorreoValido, esPasswordSegura } from '../../utils/validaciones';
 
 export default function AdminPerfil() {
-  const { usuario } = useAuth ? useAuth() : { usuario: null };
-  const [adminData, setAdminData] = useState({
-    id: '1',
-    nombre: 'Administrador',
-    apellidos: 'General',
-    correo: 'admin@levelup.cl',
-    rol: 'admin',
-    puntos: 0
-  });
+  // RutaProtegidaAdmin asegura que aquí siempre hay un administrador con sesión
+  const { usuario, refrescarUsuario } = useAuth();
 
+  const [adminData, setAdminData] = useState({
+    nombre: usuario.nombre,
+    apellidos: usuario.apellidos,
+    correo: usuario.correo,
+    password: '',
+    confirmarPassword: '',
+  });
   const [mensaje, setMensaje] = useState(null);
 
-  useEffect(() => {
-    const lista = obtenerUsuarios() || [];
-    const actual = lista.find(
-      (u) => (u.correo || '').toLowerCase() === (usuario?.correo || 'admin@levelup.cl').toLowerCase() || u.rol === 'admin'
-    );
+  const handleChange = (e) => {
+    setAdminData({ ...adminData, [e.target.name]: e.target.value });
+  };
 
-    if (actual) {
-      setAdminData(actual);
+  // Devuelve el primer error encontrado o null si los datos son válidos
+  const validar = () => {
+    if (!adminData.nombre.trim() || !adminData.apellidos.trim()) return 'Nombre y apellidos son obligatorios';
+    if (!esCorreoValido(adminData.correo)) return 'Ingresa un correo electrónico válido';
+    const otro = obtenerUsuarioPorCorreo(adminData.correo);
+    if (otro && otro.id !== usuario.id) return 'Ese correo ya pertenece a otra cuenta';
+    if (adminData.password) {
+      if (!esPasswordSegura(adminData.password)) return 'La contraseña debe tener mínimo 8 caracteres, con letras y números';
+      if (adminData.password !== adminData.confirmarPassword) return 'Las contraseñas no coinciden';
     }
-  }, [usuario]);
+    return null;
+  };
 
   const handleGuardar = (e) => {
     e.preventDefault();
-    if (adminData.id) {
-      actualizarUsuario(adminData.id, {
-        nombre: adminData.nombre,
-        apellidos: adminData.apellidos,
-        correo: adminData.correo,
-        rol: 'admin'
-      });
+
+    const error = validar();
+    if (error) {
+      setMensaje({ tipo: 'danger', texto: error });
+      return;
     }
+
+    actualizarUsuario(usuario.id, {
+      nombre: adminData.nombre.trim(),
+      apellidos: adminData.apellidos.trim(),
+      correo: adminData.correo.trim().toLowerCase(),
+      // Si no escribe una nueva contraseña se mantiene la actual
+      ...(adminData.password && { password: adminData.password }),
+    });
+    refrescarUsuario();
+
+    setAdminData({ ...adminData, password: '', confirmarPassword: '' });
     setMensaje({ tipo: 'success', texto: '¡Perfil de administrador actualizado correctamente!' });
     setTimeout(() => setMensaje(null), 3000);
   };
@@ -47,13 +63,14 @@ export default function AdminPerfil() {
           <i className="bi bi-person-badge me-2"></i>Perfil de Administrador
         </h2>
         <p className="text-secondary">
-          Consulta y actualiza tus credenciales y datos personales del sistema.
+          Consulta y actualiza tus datos personales y la contraseña de tu cuenta.
         </p>
       </div>
 
       {mensaje && (
-        <div className={`alert alert-${mensaje.tipo} alert-dismissible fade show`} role="alert">
-          <i className="bi bi-check-circle-fill me-2"></i>{mensaje.texto}
+        <div className={`alert alert-${mensaje.tipo} py-2`} role="alert">
+          <i className={`bi ${mensaje.tipo === 'success' ? 'bi-check-circle-fill' : 'bi-exclamation-triangle-fill'} me-2`}></i>
+          {mensaje.texto}
         </div>
       )}
 
@@ -66,15 +83,15 @@ export default function AdminPerfil() {
                 className="bg-info text-dark rounded-circle d-inline-flex align-items-center justify-content-center fw-bold fs-1 shadow"
                 style={{ width: '90px', height: '90px' }}
               >
-                {(adminData.nombre?.[0] || 'A').toUpperCase()}
+                {(usuario.nombre?.[0] || 'A').toUpperCase()}
               </div>
             </div>
             <h5 className="fw-bold text-light mb-1">
-              {adminData.nombre} {adminData.apellidos}
+              {usuario.nombre} {usuario.apellidos}
             </h5>
-            <span className="badge bg-danger mb-3">Administrador Principal</span>
+            <span className="badge bg-danger mb-3 align-self-center">Administrador</span>
             <p className="text-secondary small mb-0">
-              <i className="bi bi-envelope me-1"></i>{adminData.correo}
+              <i className="bi bi-envelope me-1"></i>{usuario.correo}
             </p>
           </div>
         </div>
@@ -85,55 +102,41 @@ export default function AdminPerfil() {
             <h5 className="fw-bold text-info mb-3">
               <i className="bi bi-pencil-square me-2"></i>Editar Información
             </h5>
-            <form onSubmit={handleGuardar}>
+            <form onSubmit={handleGuardar} noValidate>
               <div className="row g-3">
                 <div className="col-md-6">
-                  <label className="form-label text-secondary small fw-bold">Nombre</label>
-                  <input
-                    type="text"
+                  <label htmlFor="adminNombre" className="form-label text-secondary small fw-bold">Nombre</label>
+                  <input id="adminNombre" type="text" name="nombre"
                     className="form-control bg-dark text-light border-secondary"
-                    required
-                    value={adminData.nombre || ''}
-                    onChange={(e) => setAdminData({ ...adminData, nombre: e.target.value })}
-                  />
+                    value={adminData.nombre} onChange={handleChange} />
                 </div>
                 <div className="col-md-6">
-                  <label className="form-label text-secondary small fw-bold">Apellidos</label>
-                  <input
-                    type="text"
+                  <label htmlFor="adminApellidos" className="form-label text-secondary small fw-bold">Apellidos</label>
+                  <input id="adminApellidos" type="text" name="apellidos"
                     className="form-control bg-dark text-light border-secondary"
-                    required
-                    value={adminData.apellidos || ''}
-                    onChange={(e) => setAdminData({ ...adminData, apellidos: e.target.value })}
-                  />
+                    value={adminData.apellidos} onChange={handleChange} />
                 </div>
-                <div className="col-md-12">
-                  <label className="form-label text-secondary small fw-bold">Correo Electrónico</label>
-                  <input
-                    type="email"
+                <div className="col-12">
+                  <label htmlFor="adminCorreo" className="form-label text-secondary small fw-bold">Correo Electrónico</label>
+                  <input id="adminCorreo" type="email" name="correo"
                     className="form-control bg-dark text-light border-secondary"
-                    required
-                    value={adminData.correo || ''}
-                    onChange={(e) => setAdminData({ ...adminData, correo: e.target.value })}
-                  />
+                    value={adminData.correo} onChange={handleChange} />
+                </div>
+
+                <div className="col-12 pt-2 border-top border-secondary">
+                  <span className="text-secondary small">Cambiar contraseña (déjalo vacío para mantener la actual)</span>
                 </div>
                 <div className="col-md-6">
-                  <label className="form-label text-secondary small fw-bold">Nivel de Acceso</label>
-                  <input
-                    type="text"
-                    className="form-control bg-dark text-secondary border-secondary"
-                    value="Administrador (Acceso Total)"
-                    disabled
-                  />
+                  <label htmlFor="adminPassword" className="form-label text-secondary small fw-bold">Nueva contraseña</label>
+                  <input id="adminPassword" type="password" name="password"
+                    className="form-control bg-dark text-light border-secondary"
+                    value={adminData.password} onChange={handleChange} />
                 </div>
                 <div className="col-md-6">
-                  <label className="form-label text-secondary small fw-bold">Puntos LevelUp</label>
-                  <input
-                    type="text"
-                    className="form-control bg-dark text-warning border-secondary fw-bold"
-                    value={`${adminData.puntos || 0} pts`}
-                    disabled
-                  />
+                  <label htmlFor="adminConfirmar" className="form-label text-secondary small fw-bold">Confirmar contraseña</label>
+                  <input id="adminConfirmar" type="password" name="confirmarPassword"
+                    className="form-control bg-dark text-light border-secondary"
+                    value={adminData.confirmarPassword} onChange={handleChange} />
                 </div>
               </div>
               <div className="mt-4 text-end">

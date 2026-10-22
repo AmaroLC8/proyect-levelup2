@@ -1,5 +1,6 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
+import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 const OPCIONES_ADMIN = [
   { to: '/admin', texto: 'Dashboard', icono: 'bi-speedometer2', exact: true },
@@ -12,6 +13,14 @@ const OPCIONES_ADMIN = [
 ];
 
 export default function AdminSidebar() {
+  const navigate = useNavigate();
+  const { cerrarSesion } = useAuth();
+
+  const handleCerrarSesion = () => {
+    cerrarSesion();
+    navigate('/');
+  };
+
   return (
     <div
       className="p-3 d-flex flex-column min-vh-100"
@@ -49,6 +58,16 @@ export default function AdminSidebar() {
           </li>
         ))}
       </ul>
+
+      {/* Accesos finales del menú (Figura 9 de la pauta) */}
+      <div className="d-grid gap-2 pt-3 mt-3 border-top border-secondary">
+        <Link to="/" className="btn btn-outline-light fw-semibold">
+          <i className="bi bi-shop me-2"></i>Ver Tienda
+        </Link>
+        <button className="btn btn-danger fw-semibold" onClick={handleCerrarSesion}>
+          <i className="bi bi-box-arrow-right me-2"></i>Cerrar Sesión
+        </button>
+      </div>
     </div>
   );
 }

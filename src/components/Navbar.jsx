@@ -73,13 +73,17 @@ export default function Navbar() {
             <div className="d-flex flex-wrap align-items-center gap-2">
               {usuario ? (
                 <>
-                  <span className="text-light small me-1">
+                  <Link
+                    to={esAdmin ? '/admin/perfil' : '/perfil'}
+                    className="text-light small me-1 text-decoration-none"
+                    title="Ver mi perfil"
+                  >
                     <i className="bi bi-person-circle text-info me-1"></i>
                     Hola, <strong>{usuario.nombre}</strong>
                     {usuario.descuentoDuoc && (
                       <span className="badge bg-warning text-dark ms-2">Duoc -20%</span>
                     )}
-                  </span>
+                  </Link>
                   <button className="btn btn-sm btn-outline-danger" onClick={handleCerrarSesion}>
                     <i className="bi bi-box-arrow-right me-1"></i>Salir
                   </button>

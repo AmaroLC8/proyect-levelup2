@@ -1,89 +1,42 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { obtenerUsuarios, actualizarUsuario } from '../data/usuarios';
-import { obtenerOrdenes, obtenerOrdenesPorUsuario } from '../data/ordenes';
+import { actualizarUsuario } from '../data/usuarios';
+import { obtenerOrdenesPorUsuario, ordenarPorFechaDesc } from '../data/ordenes';
+import { formatearDinero, formatearFecha } from '../utils/formato';
+import EstadoOrden from '../components/EstadoOrden';
 
 export default function Perfil() {
-  const { usuario, setUsuario } = useAuth ? useAuth() : { usuario: null };
-  const [datosUser, setDatosUser] = useState(null);
-  const [compras, setCompras] = useState([]);
+  const { usuario, refrescarUsuario } = useAuth();
   const [editando, setEditando] = useState(false);
   const [mensaje, setMensaje] = useState(null);
+  const [form, setForm] = useState({ nombre: '', apellidos: '' });
 
-  const [form, setForm] = useState({
-    nombre: '',
-    apellidos: '',
-    correo: ''
-  });
+  // Sin sesión no hay perfil que mostrar (RF5)
+  if (!usuario) return <Navigate to="/login" replace />;
 
-  useEffect(() => {
-    cargarPerfil();
-  }, [usuario]);
+  const datosUser = usuario;
+  const compras = ordenarPorFechaDesc(obtenerOrdenesPorUsuario(usuario.id));
+  const esDuoc = usuario.descuentoDuoc;
 
-  const cargarPerfil = () => {
-    const listaUsuarios = obtenerUsuarios() || [];
-    const correoBuscar = usuario?.correo || usuario?.email || 'juan.perez@duocuc.cl';
-
-    const encontrado = listaUsuarios.find(
-      (u) => (u.correo || u.email || '').toLowerCase() === correoBuscar.toLowerCase()
-    );
-
-    if (encontrado) {
-      setDatosUser(encontrado);
-      setForm({
-        nombre: encontrado.nombre || '',
-        apellidos: encontrado.apellidos || '',
-        correo: encontrado.correo || encontrado.email || ''
-      });
-
-      // Cargar historial de compras del cliente
-      const ordenesTodas = obtenerOrdenes() || [];
-      const porId = typeof obtenerOrdenesPorUsuario === 'function' ? obtenerOrdenesPorUsuario(encontrado.id) : [];
-      const porEmail = ordenesTodas.filter(
-        (o) => (o.cliente?.correo || o.cliente?.email || o.email || '').toLowerCase() === correoBuscar.toLowerCase()
-      );
-
-      setCompras(porId.length > 0 ? porId : porEmail);
-    }
+  const handleEditar = () => {
+    setForm({ nombre: usuario.nombre, apellidos: usuario.apellidos });
+    setEditando(true);
   };
 
   const handleGuardar = (e) => {
     e.preventDefault();
-    if (!datosUser) return;
 
-    actualizarUsuario(datosUser.id, {
-      nombre: form.nombre,
-      apellidos: form.apellidos
+    actualizarUsuario(usuario.id, {
+      nombre: form.nombre.trim(),
+      apellidos: form.apellidos.trim()
     });
-
-    const actualizado = {
-      ...datosUser,
-      nombre: form.nombre,
-      apellidos: form.apellidos
-    };
-
-    setDatosUser(actualizado);
-    if (setUsuario) {
-      setUsuario(actualizado);
-    }
+    refrescarUsuario();
 
     setEditando(false);
     setMensaje({ tipo: 'success', texto: '¡Datos de perfil actualizados exitosamente!' });
     setTimeout(() => setMensaje(null), 3000);
   };
-
-  const formatearCLP = (monto) =>
-    new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(monto || 0);
-
-  if (!datosUser) {
-    return (
-      <div className="container py-5 text-center text-light">
-        <h4 className="text-info">Cargando perfil de cliente...</h4>
-      </div>
-    );
-  }
-
-  const esDuoc = (datosUser.correo || datosUser.email || '').endsWith('@duocuc.cl') || datosUser.descuentoDuoc;
 
   return (
     <div className="container py-4 text-light" style={{ maxWidth: '950px' }}>
@@ -144,7 +97,9 @@ export default function Perfil() {
             <div className="d-flex justify-content-between align-items-center">
               <div>
                 <span className="text-secondary small fw-bold">COMPRAS REALIZADAS</span>
-                <h3 className="fw-bold text-info mb-0 mt-1">{compras.length} pedido(s)</h3>
+                <h3 className="fw-bold text-info mb-0 mt-1">
+                  {compras.filter((o) => o.estado === 'pagada').length} pedido(s)
+                </h3>
               </div>
               <div className="bg-info bg-opacity-10 text-info p-3 rounded-circle fs-3">
                 <i className="bi bi-bag-check"></i>
@@ -165,7 +120,7 @@ export default function Perfil() {
               {!editando && (
                 <button
                   className="btn btn-sm btn-outline-warning"
-                  onClick={() => setEditando(true)}
+                  onClick={handleEditar}
                 >
                   <i className="bi bi-pencil me-1"></i>Editar
                 </button>
@@ -199,7 +154,7 @@ export default function Perfil() {
                   <input
                     type="email"
                     className="form-control bg-dark text-secondary border-secondary"
-                    value={form.correo}
+                    value={usuario.correo}
                     disabled
                   />
                 </div>
@@ -224,7 +179,7 @@ export default function Perfil() {
                 </li>
                 <li className="list-group-item bg-dark text-light border-secondary px-0">
                   <span className="text-secondary small d-block">Correo Electrónico:</span>
-                  <span>{datosUser.correo || datosUser.email}</span>
+                  <span>{datosUser.correo}</span>
                 </li>
                 <li className="list-group-item bg-dark text-light border-secondary px-0">
                   <span className="text-secondary small d-block">Código de Referido:</span>
@@ -243,7 +198,7 @@ export default function Perfil() {
             </h5>
 
             {compras.length === 0 ? (
-              <div className="text-center py-4 text-muted">
+              <div className="text-center py-4 text-secondary">
                 <i className="bi bi-cart-x fs-1 d-block mb-2"></i>
                 Aún no has realizado ninguna compra en la tienda.
               </div>
@@ -255,21 +210,21 @@ export default function Perfil() {
                       <th>N° Orden</th>
                       <th>Fecha</th>
                       <th>Productos</th>
-                      <th className="text-end">Total Pagado</th>
+                      <th>Estado</th>
+                      <th className="text-end">Total</th>
                     </tr>
                   </thead>
                   <tbody>
                     {compras.map((ord) => (
-                      <tr key={ord.id || ord.numeroOrden}>
-                        <td className="fw-bold text-info">#{ord.id || ord.numeroOrden}</td>
+                      <tr key={ord.id}>
+                        <td className="fw-bold text-info">#{ord.numeroOrden}</td>
+                        <td className="small">{formatearFecha(ord.fecha)}</td>
                         <td className="small">
-                          {ord.fecha ? new Date(ord.fecha).toLocaleDateString('es-CL') : 'N/A'}
+                          {ord.items.map((i) => `${i.nombre} (x${i.cantidad})`).join(', ')}
                         </td>
-                        <td className="small">
-                          {(ord.items || []).map((i) => `${i.nombre || i.titulo} (x${i.cantidad})`).join(', ')}
-                        </td>
+                        <td><EstadoOrden estado={ord.estado} /></td>
                         <td className="text-end fw-bold text-success">
-                          {formatearCLP(ord.total)}
+                          {formatearDinero(ord.total)}
                         </td>
                       </tr>
                     ))}
