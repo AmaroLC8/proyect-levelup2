@@ -1,27 +1,16 @@
 import React from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
-import AdminOrdenes from "./pages/admin/AdminOrdenes";
-import VerBoletaAdmin from "./pages/admin/VerBoletaAdmin";
-
-import AdminPerfil from "./pages/admin/AdminPerfil";
-
-import AdminReportes from "./pages/admin/AdminReportes";
-
-import AdminCategorias from "./pages/admin/AdminCategorias";
-
-import AdminUsuarios from "./pages/admin/AdminUsuarios";
-
 // Contextos
 import { AuthProvider } from "./context/AuthContext";
 import { CartProvider } from "./context/CartContext";
 
-// Componentes generales
+// Componentes generales y de seguridad
 import Navbar from "./components/Navbar";
 import RutaProtegidaAdmin from "./components/RutaProtegida";
 import AdminLayout from "./components/AdminLayout";
 
-// Páginas Públicas
+// Páginas Públicas y de Cliente
 import Home from "./pages/Home";
 import Productos from "./pages/Productos";
 import DetalleProducto from "./pages/DetalleProducto";
@@ -37,20 +26,17 @@ import Carrito from "./pages/Carrito";
 import Checkout from "./pages/Checkout";
 import PagoExitoso from "./pages/PagoExitoso";
 import PagoError from "./pages/PagoError";
+import Perfil from "./pages/Perfil"; // <--- Perfil del Cliente
 
-// Páginas Administrador (Solo importamos los archivos que YA existen)
+// Páginas Administrador
 import AdminDashboard from "./pages/admin/AdminDashboard";
+import AdminOrdenes from "./pages/admin/AdminOrdenes";
+import VerBoletaAdmin from "./pages/admin/VerBoletaAdmin";
 import AdminProductos from "./pages/admin/AdminProductos";
-
-// Componente auxiliar para secciones en desarrollo
-const EnConstruccion = ({ titulo }) => (
-  <div className="text-light p-5 text-center">
-    <h3 className="text-info mb-3">{titulo}</h3>
-    <p className="text-secondary">
-      Esta sección se implementará en los siguientes puntos.
-    </p>
-  </div>
-);
+import AdminCategorias from "./pages/admin/AdminCategorias";
+import AdminUsuarios from "./pages/admin/AdminUsuarios";
+import AdminReportes from "./pages/admin/AdminReportes";
+import AdminPerfil from "./pages/admin/AdminPerfil"; // <--- Perfil del Admin
 
 export default function App() {
   return (
@@ -62,7 +48,7 @@ export default function App() {
 
             <main className="flex-grow-1">
               <Routes>
-                {/* Rutas de la Tienda Pública */}
+                {/* 1. Rutas Públicas de la Tienda */}
                 <Route path="/" element={<Home />} />
                 <Route path="/productos" element={<Productos />} />
                 <Route path="/producto/:id" element={<DetalleProducto />} />
@@ -79,7 +65,10 @@ export default function App() {
                 <Route path="/pago-exitoso" element={<PagoExitoso />} />
                 <Route path="/pago-error" element={<PagoError />} />
 
-                {/* Rutas Protegidas del Panel Administrador */}
+                {/* 2. Perfil del Cliente (FUERA de /admin) */}
+                <Route path="/perfil" element={<Perfil />} />
+
+                {/* 3. Rutas Protegidas del Panel Administrador */}
                 <Route element={<RutaProtegidaAdmin />}>
                   <Route path="/admin" element={<AdminLayout />}>
                     <Route index element={<AdminDashboard />} />
