@@ -6,6 +6,8 @@ import VerBoletaAdmin from "./pages/admin/VerBoletaAdmin";
 
 import AdminCategorias from "./pages/admin/AdminCategorias";
 
+import AdminUsuarios from "./pages/admin/AdminUsuarios";
+
 // Contextos
 import { AuthProvider } from "./context/AuthContext";
 import { CartProvider } from "./context/CartContext";
@@ -81,10 +83,7 @@ export default function App() {
                     <Route path="ordenes/:id" element={<VerBoletaAdmin />} />
                     <Route path="productos" element={<AdminProductos />} />
                     <Route path="categorias" element={<AdminCategorias />} />
-                    <Route
-                      path="usuarios"
-                      element={<EnConstruccion titulo="Gestión de Usuarios" />}
-                    />
+                    <Route path="usuarios" element={<AdminUsuarios />} />
                     <Route
                       path="reportes"
                       element={<EnConstruccion titulo="Reportes y Ventas" />}
