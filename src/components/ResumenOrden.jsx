@@ -1,5 +1,6 @@
 import React from 'react';
 import { formatearDinero } from '../utils/formato';
+import DesgloseTotales from './DesgloseTotales';
 
 // Detalle de una orden: cliente, dirección, productos y totales.
 // Se reutiliza en compra exitosa, pago con error y en la boleta del administrador.
@@ -45,22 +46,7 @@ export default function ResumenOrden({ orden, etiquetaTotal = 'Total pagado' }) 
             ))}
           </tbody>
           <tfoot>
-            {descuento > 0 && (
-              <>
-                <tr>
-                  <td colSpan="3" className="text-end text-secondary">Subtotal:</td>
-                  <td className="text-end text-light">{formatearDinero(subtotal)}</td>
-                </tr>
-                <tr>
-                  <td colSpan="3" className="text-end text-warning">Descuento Duoc:</td>
-                  <td className="text-end text-warning">-{formatearDinero(descuento)}</td>
-                </tr>
-              </>
-            )}
-            <tr>
-              <td colSpan="3" className="text-end fs-5 fw-bold text-light py-3">{etiquetaTotal}:</td>
-              <td className="text-end fs-5 fw-bold text-success py-3">{formatearDinero(total)}</td>
-            </tr>
+            <DesgloseTotales subtotal={subtotal} descuento={descuento} total={total} etiquetaTotal={etiquetaTotal} />
           </tfoot>
         </table>
       </div>

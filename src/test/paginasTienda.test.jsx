@@ -171,14 +171,25 @@ describe('Pruebas de las vistas de la tienda', () => {
       escribir('calle', 'Av. Siempre Viva 742');
     };
 
-    it('el carrito de un usuario Duoc muestra subtotal, descuento y total', () => {
+    it('el carrito de un usuario Duoc muestra subtotal, descuento, impuestos y total', () => {
       localStorage.setItem('levelup_sesion', '2');
       localStorage.setItem('levelup_cart', JSON.stringify([{ id: 5, nombre: 'Mouse Gamer', precio: 10000, cantidad: 2, imagen: '' }]));
       abrirEn('/carrito');
 
       expect(screen.getByText(/descuento duoc \(20%\)/i)).toBeInTheDocument();
       expect(screen.getByText('-$4.000')).toBeInTheDocument();
+      // $16.000 con IVA incluido = neto $13.445 + IVA $2.555
+      expect(screen.getByText('Neto:').nextSibling).toHaveTextContent('$13.445');
+      expect(screen.getByText('IVA (19%):').nextSibling).toHaveTextContent('$2.555');
       expect(screen.getByRole('link', { name: /carrito/i })).toHaveTextContent('Carrito $16.000');
+    });
+
+    it('el checkout muestra el IVA antes de pagar', () => {
+      localStorage.setItem('levelup_cart', JSON.stringify([{ id: 1, nombre: 'PlayStation 5 Slim 1TB', precio: 499990, cantidad: 1 }]));
+      abrirEn('/checkout');
+
+      expect(screen.getByText('IVA (19%):').nextSibling).toHaveTextContent('$79.830');
+      expect(screen.getByText('Total a pagar:').nextSibling).toHaveTextContent('$499.990');
     });
 
     it('en el checkout las comunas cambian con la región y valida el correo (RF11)', () => {

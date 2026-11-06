@@ -1,11 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { obtenerPrecioFinal } from '../data/productos';
 import { useAuth } from './AuthContext';
+import { PORCENTAJE_DESCUENTO_DUOC } from '../utils/precios';
 
 const CartContext = createContext();
-
-// Descuento de por vida para usuarios registrados con correo Duoc (RF1 y RF3)
-export const PORCENTAJE_DESCUENTO_DUOC = 20;
 
 export const CartProvider = ({ children }) => {
   const { usuario } = useAuth();

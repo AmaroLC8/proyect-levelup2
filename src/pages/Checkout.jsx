@@ -7,6 +7,7 @@ import { descontarStock } from '../data/productos';
 import { obtenerRegiones, obtenerComunas } from '../data/regiones';
 import { esCorreoValido, validarNombreCompleto } from '../utils/validaciones';
 import { formatearDinero } from '../utils/formato';
+import DesgloseTotales from '../components/DesgloseTotales';
 
 const REGION_POR_DEFECTO = 'Región Metropolitana de Santiago';
 
@@ -140,14 +141,15 @@ export default function Checkout() {
                   </tr>
                 ))}
               </tbody>
-              {descuento > 0 && (
-                <tfoot>
-                  <tr>
-                    <td colSpan="3" className="text-end text-warning">Descuento Duoc (20%):</td>
-                    <td className="text-warning">-{formatearDinero(descuento)}</td>
-                  </tr>
-                </tfoot>
-              )}
+              <tfoot>
+                <DesgloseTotales
+                  subtotal={subtotal}
+                  descuento={descuento}
+                  total={totalMonto}
+                  etiquetaTotal="Total a pagar"
+                  alineacionValor=""
+                />
+              </tfoot>
             </table>
           </div>
 

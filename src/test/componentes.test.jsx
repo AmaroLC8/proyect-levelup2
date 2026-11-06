@@ -6,6 +6,7 @@ import { AuthProvider } from '../context/AuthContext';
 import { CartProvider } from '../context/CartContext';
 import ProductCard from '../components/ProductCard';
 import ResumenOrden from '../components/ResumenOrden';
+import DesgloseTotales from '../components/DesgloseTotales';
 import EstadoOrden from '../components/EstadoOrden';
 import RutaProtegidaAdmin from '../components/RutaProtegida';
 import Navbar from '../components/Navbar';
@@ -75,8 +76,8 @@ describe('Pruebas de componentes reutilizables', () => {
       render(<ResumenOrden orden={ordenDePrueba} />);
 
       const filas = within(screen.getByRole('table')).getAllByRole('row');
-      // encabezado + 2 productos + subtotal + descuento + total
-      expect(filas).toHaveLength(6);
+      // encabezado + 2 productos + subtotal + descuento + neto + IVA + total
+      expect(filas).toHaveLength(8);
       expect(screen.getByText('Mouse Gamer 16000 DPI Sensor Óptico')).toBeInTheDocument();
       expect(screen.getByText(/Av\. Siempre Viva 742 \(Depto 12\), Talca, Maule/)).toBeInTheDocument();
       expect(screen.getByText('"Dejar en conserjería"')).toBeInTheDocument();
@@ -84,12 +85,41 @@ describe('Pruebas de componentes reutilizables', () => {
 
     it('muestra la fila de descuento solo si la orden tiene descuento y usa la etiqueta recibida', () => {
       const { rerender } = render(<ResumenOrden orden={ordenDePrueba} />);
-      expect(screen.getByText('Descuento Duoc:')).toBeInTheDocument();
+      expect(screen.getByText('Descuento Duoc (20%):')).toBeInTheDocument();
       expect(screen.getByText('Total pagado:')).toBeInTheDocument();
 
       rerender(<ResumenOrden orden={{ ...ordenDePrueba, descuento: 0 }} etiquetaTotal="Monto pendiente" />);
-      expect(screen.queryByText('Descuento Duoc:')).not.toBeInTheDocument();
+      expect(screen.queryByText('Descuento Duoc (20%):')).not.toBeInTheDocument();
       expect(screen.getByText('Monto pendiente:')).toBeInTheDocument();
+    });
+
+    it('desglosa el total en neto e IVA del 19%', () => {
+      render(<ResumenOrden orden={ordenDePrueba} />);
+      // Total $447.976 con IVA incluido = neto $376.450 + IVA $71.526
+      expect(screen.getByText('Neto:').nextSibling).toHaveTextContent('$376.450');
+      expect(screen.getByText('IVA (19%):').nextSibling).toHaveTextContent('$71.526');
+    });
+  });
+
+  describe('DesgloseTotales', () => {
+    const enTabla = (filas) => render(<table><tfoot>{filas}</tfoot></table>);
+
+    it('sin descuento muestra solo neto, IVA y total', () => {
+      enTabla(<DesgloseTotales subtotal={11900} total={11900} />);
+
+      expect(screen.queryByText('Subtotal:')).not.toBeInTheDocument();
+      expect(screen.getByText('Neto:').nextSibling).toHaveTextContent('$10.000');
+      expect(screen.getByText('IVA (19%):').nextSibling).toHaveTextContent('$1.900');
+      expect(screen.getByText('Total:').nextSibling).toHaveTextContent('$11.900');
+    });
+
+    it('con descuento calcula el IVA sobre el total ya descontado', () => {
+      enTabla(<DesgloseTotales subtotal={14875} descuento={2975} total={11900} etiquetaTotal="Total a pagar" />);
+
+      expect(screen.getByText('Subtotal:').nextSibling).toHaveTextContent('$14.875');
+      expect(screen.getByText('Descuento Duoc (20%):').nextSibling).toHaveTextContent('-$2.975');
+      expect(screen.getByText('IVA (19%):').nextSibling).toHaveTextContent('$1.900');
+      expect(screen.getByText('Total a pagar:')).toBeInTheDocument();
     });
   });
 

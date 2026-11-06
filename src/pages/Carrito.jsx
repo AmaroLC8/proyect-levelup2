@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { useCart, PORCENTAJE_DESCUENTO_DUOC } from '../context/CartContext';
+import { useCart } from '../context/CartContext';
+import DesgloseTotales from '../components/DesgloseTotales';
 import { formatearDinero } from '../utils/formato';
 
 export default function Carrito() {
@@ -98,28 +99,14 @@ export default function Carrito() {
                 ))}
               </tbody>
               <tfoot>
-                {descuento > 0 && (
-                  <>
-                    <tr>
-                      <td colSpan="4" className="text-end text-secondary">Subtotal:</td>
-                      <td colSpan="2" className="text-light">{formatearDinero(subtotal)}</td>
-                    </tr>
-                    <tr>
-                      <td colSpan="4" className="text-end text-warning">
-                        <i className="bi bi-mortarboard-fill me-1"></i>Descuento Duoc ({PORCENTAJE_DESCUENTO_DUOC}%):
-                      </td>
-                      <td colSpan="2" className="text-warning fw-bold">-{formatearDinero(descuento)}</td>
-                    </tr>
-                  </>
-                )}
-                <tr>
-                  <td colSpan="4" className="text-end fs-5 fw-bold text-light py-3">
-                    Total:
-                  </td>
-                  <td colSpan="2" className="fs-4 fw-bold text-info py-3">
-                    {formatearDinero(totalMonto)}
-                  </td>
-                </tr>
+                <DesgloseTotales
+                  subtotal={subtotal}
+                  descuento={descuento}
+                  total={totalMonto}
+                  columnas={4}
+                  columnasValor={2}
+                  alineacionValor=""
+                />
               </tfoot>
             </table>
           </div>
