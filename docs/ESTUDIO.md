@@ -1,8 +1,12 @@
 # Guía de estudio – Level-Up Gamer Frontend
 
 Este documento explica cada parte del frontend para poder defenderlo y modificarlo en vivo.
-Se completa a medida que el frontend se conecta al backend (tareas F1, F2, ...).
+Desde la tarea F4 **todo** el frontend usa el backend: productos, categorías, sesión, boletas, usuarios y reportes.
+En `src/data` solo quedan los datos que no vienen del backend (`blogs.js` y `regiones.js`).
 La guía del backend está en `levelup-backend/docs/ESTUDIO.md`.
+
+Resumen de las tareas: F1 productos y categorías (sección 4) · F2 sesión con JWT y roles (secciones 8 y 9) ·
+F3 compras y órdenes (sección 10) · F4 usuarios, dashboard, reportes y limpieza (sección 11).
 
 ---
 
@@ -104,7 +108,7 @@ Todas las funciones **devuelven una Promesa**: la página usa `.then(...)` o `aw
 
 ## 5. Diferencias de formato entre el frontend antiguo y el backend
 
-| Dato | Antes (`src/data/productos.js`) | Ahora (backend) |
+| Dato | Antes (`src/data/productos.js`, eliminado en F4) | Ahora (backend) |
 |---|---|---|
 | Categoría del producto (al leer) | texto: `categoria: "Consolas"` | objeto: `categoria: { id: 1, nombre: "Consolas", descripcion, activa }` |
 | Categoría del producto (al guardar) | `categoria: "Consolas"` | `categoriaId: 1` (formato `ProductoRequest`) |
@@ -129,9 +133,8 @@ Cómo se adaptó cada lugar:
   se copiaron a `public/img/`. Vite publica la carpeta `public` tal cual en la raíz del sitio, así
   `http://localhost:5173/img/ps5.jpg` existe. (Lo que está en `src/assets` solo funciona con `import`.)
 
-`esOferta`, `obtenerPrecioFinal` y `obtenerPorcentajeDescuento` se movieron a `src/utils/precios.js`
-porque son cálculos, no datos. `data/productos.js` los reexporta para que el carrito siga funcionando
-hasta que ese archivo se elimine (tarea F4).
+`esOferta`, `obtenerPrecioFinal` y `obtenerPorcentajeDescuento` están en `src/utils/precios.js`
+porque son cálculos, no datos. Los usan ProductCard, DetalleProducto, Ofertas, AdminProductos y CartContext.
 
 ---
 
@@ -267,7 +270,7 @@ Igual que `backendSimulado.js`, pero para `authService` (`vi.mock('../services/a
 | `utils/roles.js` | `ROLES` (`'ADMIN'`, `'VENDEDOR'`, `'CLIENTE'`), `NOMBRE_ROL` y `rutaInicialPorRol` |
 | `components/RutaProtegida.jsx` | Deja pasar solo a los `rolesPermitidos` |
 
-`src/data/usuarios.js` ya **no** se usa para la sesión (solo lo usa AdminUsuarios mientras no se conecte a `/usuarios`).
+La sesión ya no usa datos locales: el antiguo `src/data/usuarios.js` se eliminó en F4.
 
 ### Flujo del login
 ```
@@ -413,7 +416,7 @@ producto al carrito: se cobra el precio vigente.
                   "cantidad": 1, "precioUnitario": 27990, "subtotal": 27990 } ],
   "subtotal": 127970, "descuento": 25594, "neto": 86030, "iva": 16346, "total": 102376 }
 ```
-Diferencias con las órdenes locales antiguas (`data/ordenes.js`):
+Diferencias con las órdenes locales antiguas (`data/ordenes.js`, eliminado en F4):
 
 | Antes (local) | Ahora (backend) |
 |---|---|
@@ -423,7 +426,7 @@ Diferencias con las órdenes locales antiguas (`data/ordenes.js`):
 | `usuarioId` | `usuario` (objeto o `null`) |
 | neto e IVA se calculaban al mostrar | `neto` e `iva` vienen guardados en la boleta |
 
-`EstadoOrden` acepta los dos formatos de estado mientras el Dashboard y AdminUsuarios sigan usando las órdenes locales.
+`EstadoOrden` solo conoce `PAGADA` y `RECHAZADA`; cualquier otro estado se muestra en gris sin romper la vista.
 
 ### Panel (ADMIN y VENDEDOR)
 - `AdminOrdenes`: `listarBoletas()` con carga y error. El backend ya las entrega de la más reciente a la más antigua.
@@ -442,19 +445,103 @@ descuento de stock solo en las pagadas. Trae 2 boletas de ejemplo (una PAGADA de
 
 ---
 
-## 11. Pendiente (próximas tareas)
+## 11. Usuarios, dashboard y reportes (tarea F4)
 
-- **Dashboard, reportes y el historial de AdminUsuarios** siguen usando `data/ordenes.js` (órdenes locales con
-  estado en minúsculas). Los enlaces del Dashboard a cada orden usan ids locales (1 y 2), pero `/admin/ordenes/:id`
-  ahora busca en el backend: pueden abrir otra boleta o "Orden no encontrada" hasta que el Dashboard use `/reportes`.
-- **AdminUsuarios** ya usa los roles en mayúsculas y tiene la opción VENDEDOR, pero sigue siendo CRUD local.
-- **F4**: eliminar `src/data/productos.js`, `src/data/categorias.js` y `src/data/ordenes.js` (y sus pruebas). Antes hay
-  que cambiar el import de `obtenerPrecioFinal` en `CartContext.jsx` a `../utils/precios`, las pruebas de
-  `CartContext.test.jsx` (usan `obtenerProductoPorId` local) a `PRODUCTOS_PRUEBA`, y quitar las minúsculas de `EstadoOrden`.
+### Archivos
+| Archivo | Qué hace |
+|---|---|
+| `services/usuariosService.js` | `listarUsuarios(rol)` (`GET /usuarios?rol=`), `obtenerUsuario`, `crearUsuario`, `actualizarUsuario`, `eliminarUsuario` (solo ADMIN) |
+| `services/reportesService.js` | `obtenerDashboard()` (`GET /reportes/dashboard`) y `obtenerReporteVentas()` (`GET /reportes/ventas`) (solo ADMIN) |
+| `services/boletasService.js` | Se agregó `historialUsuario(id)` → `GET /boletas/usuario/{id}` |
+| `pages/admin/AdminUsuarios.jsx` | Mantenedor de usuarios con roles e historial |
+| `pages/admin/AdminDashboard.jsx` / `AdminReportes.jsx` | Muestran las métricas que calcula el backend |
+
+### AdminUsuarios
+```
+Al abrir:      Promise.all([listarUsuarios(), listarBoletas()])
+                 └ las boletas sirven para la columna "Compras realizadas" (cuenta b.usuario.id === u.id)
+Filtro de rol: listarUsuarios('VENDEDOR') → GET /usuarios?rol=VENDEDOR   (lo filtra el backend)
+Búsqueda:      filtro local por nombre o correo sobre la lista que ya llegó
+Crear:         validarRegistro (navegador) → crearUsuario(UsuarioRequest) → POST /usuarios
+Editar:        actualizarUsuario(id, UsuarioRequest) → PUT /usuarios/{id}   (password "" = mantener la actual)
+Eliminar:      eliminarUsuario(id) → DELETE /usuarios/{id}   (409 si el usuario tiene boletas)
+Ver:           historialUsuario(id) → GET /boletas/usuario/{id}   (con su propia carga dentro del modal)
+```
+- Formato `UsuarioRequest`: `{ nombre, apellidos, correo, password, fechaNacimiento, rol }`. El rol va en mayúsculas.
+  La **fecha de nacimiento** aparece también al editar porque el backend siempre la exige.
+- El correo repetido ya no se revisa en el navegador: el backend responde **409** y el mensaje
+  ("Ya existe un usuario registrado con el correo ...") aparece en la lista de errores del modal.
+- Protecciones de la propia cuenta (en el navegador): el admin no puede eliminarse ni quitarse el rol ADMIN.
+  Si se edita a sí mismo, `actualizarUsuarioSesion` actualiza su nombre en la Navbar.
+- ¿Por qué no se eliminan usuarios con boletas? `boleta.usuario_id` es una clave foránea: las boletas quedarían
+  apuntando a un usuario que no existe y se perdería el historial de ventas.
+
+### Dashboard (`GET /reportes/dashboard`)
+| Campo | Qué es | Dónde se muestra |
+|---|---|---|
+| `ventasTotales` | Suma del total de las boletas **PAGADAS** | Tarjeta "Ventas totales" |
+| `ordenesRealizadas` | Todas las boletas (pagadas y rechazadas) | Tarjeta "Órdenes realizadas" |
+| `totalProductos` / `totalUsuarios` | Cantidades | Tarjetas |
+| `productosCriticos` | Productos con `stock <= stockCritico` | "Alertas de inventario" (con `categoria.nombre`) |
+| `ultimasOrdenes` | Las 5 boletas más recientes | "Últimas Órdenes", con enlace a `/admin/ordenes/{id}` |
+
+### Reportes (`GET /reportes/ventas`)
+| Campo | Tarjeta o sección |
+|---|---|
+| `ingresosTotales` y `ordenesPagadas` | "Ingresos totales" |
+| `ticketPromedio` | "Ticket promedio" (ingresos / órdenes pagadas, redondeado) |
+| `unidadesVendidas` y `pagosRechazados` | "Unidades vendidas" |
+| `totalDescuentos` | "Descuentos Duoc" |
+| `ventasPorCategoria: [{ categoria, monto }]` | Barras de "Ventas por Categoría" (ya vienen de mayor a menor) |
+| `rankingProductos: [{ productoId, nombre, unidades, monto }]` | "Top 5 Productos Más Vendidos" |
+
+El único cálculo que queda en el frontend es el **% de cada categoría** (`monto / suma de categorías`), porque es
+solo para dibujar la barra. Los montos por categoría y del ranking son **antes** del descuento Duoc, por eso su suma
+puede ser mayor que los ingresos totales.
+
+### ¿Por qué los reportes los calcula el backend?
+Antes el dashboard y los reportes sumaban las órdenes guardadas en el navegador. Ahora las boletas están en MySQL:
+calcular en el backend evita descargar todas las boletas solo para sumar, y todos los administradores ven las mismas cifras.
+
+### Limpieza
+- Se eliminaron `src/data/productos.js`, `categorias.js`, `ordenes.js` y `usuarios.js`, y sus pruebas
+  (`productos.test.js`, `categorias.test.js`, `ordenes.test.js` y `usuarios.test.js`), que solo probaban el CRUD en
+  localStorage. Las pruebas de `esOferta`, `obtenerPrecioFinal` y `obtenerPorcentajeDescuento` pasaron a `precios.test.js`.
+- `CartContext` importa `obtenerPrecioFinal` desde `utils/precios.js`.
+- Comprobación: una búsqueda de `data/(productos|categorias|ordenes|usuarios)` en `src` no encuentra ningún import.
+- Las imágenes `src/assets/ps5.jpg`, `catan.jpg` y `silla.jpg` ya no se importan (las que se usan están en `public/img`).
+
+### Pruebas: `src/test/panelSimulado.js`
+- `simularUsuarios()`: los 3 usuarios del backend; 409 por correo repetido, 400 si es menor de 18 y 409 al eliminar a
+  Pedro (tiene boletas).
+- `simularReportes()`: `DASHBOARD_PRUEBA` y `REPORTE_PRUEBA`, calculados a mano con las boletas de prueba.
+- `servicios.test.js` revisa, con una tabla (`it.each`), que **cada** función de los services llame al método HTTP y a
+  la ruta correctos.
+
+---
+
+## 11.1 Pendiente
+
+- Nada del frontend usa ya datos locales del catálogo, la sesión ni las compras. Quedan locales a propósito: el carrito,
+  `blogs.js` y `regiones.js`.
 
 ---
 
 ## 12. Ejemplos de modificaciones que podría pedir el profesor
+
+### Mostrar una métrica nueva del dashboard (ej: cantidad de categorías)
+1. Backend: agregar `totalCategorias` a `DashboardResponse` y llenarlo en `ReporteService.obtenerDashboard`.
+2. Frontend: en `AdminDashboard.jsx`, agregar al arreglo `kpis`
+   `{ titulo: 'Categorías', valor: datos.totalCategorias, icono: 'bi-tags', color: 'info' }`. No se toca el service.
+3. Prueba: agregar `totalCategorias` a `DASHBOARD_PRUEBA` en `panelSimulado.js`.
+
+### Que el filtro de rol de AdminUsuarios sea local en vez de usar `?rol=`
+En `handleCambiarFiltroRol` quitar `cargarUsuarios(rol)` y en `usuariosFiltrados` agregar
+`(filtroRol === 'todos' || u.rol === filtroRol)`. Ventaja: no hace otra petición. Desventaja: hay que traer todos los usuarios.
+
+### Mostrar la fecha de nacimiento o el código de referido en la tabla de usuarios
+El JSON de `GET /usuarios` ya los trae (`UsuarioResponse`). Agregar `<th>` y `<td>{u.codigoReferido}</td>` en
+`AdminUsuarios.jsx` y subir el `colSpan` de la fila "No se encontraron usuarios".
 
 ### Mostrar un dato más de la boleta (ej: la región en la lista de órdenes)
 El JSON de `GET /boletas` ya trae `region`. En `AdminOrdenes.jsx`: agregar `<th>Región</th>` en el encabezado y

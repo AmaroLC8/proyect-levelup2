@@ -7,13 +7,16 @@ import { crearBoleta, misCompras } from '../services/boletasService';
 import { simularBackend, simularBackendCaido } from './backendSimulado';
 import { simularAuth, simularSesion, PEDRO } from './sesionSimulada';
 import { simularBoletas } from './boletasSimuladas';
+import { simularReportes } from './panelSimulado';
 
 // Los services se reemplazan por funciones simuladas: las pruebas no llaman al backend real.
-// simularBackend(), simularAuth() y simularBoletas() (en beforeEach) les dan respuestas con los datos de prueba
+// simularBackend(), simularAuth(), simularBoletas() y simularReportes() (en beforeEach) les dan respuestas
+// con los datos de prueba. reportesService se necesita porque el login del ADMIN abre el dashboard.
 vi.mock('../services/productosService');
 vi.mock('../services/categoriasService');
 vi.mock('../services/authService');
 vi.mock('../services/boletasService');
+vi.mock('../services/reportesService');
 
 // Abre la aplicación completa en la ruta indicada, como lo haría el usuario
 const abrirEn = (ruta) => {
@@ -42,6 +45,7 @@ describe('Pruebas de las vistas de la tienda', () => {
     db = simularBackend();
     simularAuth();
     boletas = simularBoletas();
+    simularReportes();
   });
 
   describe('Home y Catálogo', () => {

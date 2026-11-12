@@ -1,16 +1,16 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  obtenerUsuarios,
-  obtenerUsuarioPorCorreo,
+  listarUsuarios,
   crearUsuario,
   actualizarUsuario,
   eliminarUsuario
-} from '../../data/usuarios';
-import { obtenerOrdenes, obtenerOrdenesPorUsuario, ordenarPorFechaDesc } from '../../data/ordenes';
+} from '../../services/usuariosService';
+import { listarBoletas, historialUsuario } from '../../services/boletasService';
 import { useAuth } from '../../context/AuthContext';
 import { esCorreoValido, esPasswordSegura, validarRegistro, validarNombreCompleto } from '../../utils/validaciones';
 import { formatearDinero, formatearFecha } from '../../utils/formato';
 import EstadoOrden from '../../components/EstadoOrden';
+import EstadoCarga from '../../components/EstadoCarga';
 import { ROLES, NOMBRE_ROL } from '../../utils/roles';
 
 // Color de la etiqueta de cada rol en la tabla
@@ -21,17 +21,25 @@ const COLOR_ROL = {
 };
 
 export default function AdminUsuarios() {
-  const { usuario: adminActual } = useAuth();
-  const [usuarios, setUsuarios] = useState(() => obtenerUsuarios());
-  const [ordenes] = useState(() => obtenerOrdenes());
+  const { usuario: adminActual, actualizarUsuarioSesion } = useAuth();
+  const [usuarios, setUsuarios] = useState([]);
+  const [boletas, setBoletas] = useState([]); // todas las boletas, para contar las compras de cada usuario
+  const [cargando, setCargando] = useState(true);
+  const [errorCarga, setErrorCarga] = useState(''); // el backend no respondió al listar
   const [busqueda, setBusqueda] = useState('');
   const [filtroRol, setFiltroRol] = useState('todos');
   const [modoModal, setModoModal] = useState(null); // 'crear' | 'editar' | 'ver' | null
   const [usuarioSel, setUsuarioSel] = useState(null);
   const [errores, setErrores] = useState([]);
   const [errorTabla, setErrorTabla] = useState('');
+  const [guardando, setGuardando] = useState(false);
 
-  // Estado del formulario adaptado a usuarios.js
+  // Historial del modal "Ver" (GET /boletas/usuario/{id})
+  const [historial, setHistorial] = useState([]);
+  const [cargandoHistorial, setCargandoHistorial] = useState(false);
+  const [errorHistorial, setErrorHistorial] = useState('');
+
+  // Estado del formulario con el formato de UsuarioRequest del backend
   const [form, setForm] = useState({
     id: null,
     nombre: '',
@@ -42,7 +50,32 @@ export default function AdminUsuarios() {
     rol: ROLES.CLIENTE
   });
 
-  const cargarDatos = () => setUsuarios(obtenerUsuarios());
+  // GET /usuarios?rol=... : el filtro por rol lo aplica el backend ("todos" = sin filtro)
+  const cargarUsuarios = (rol) =>
+    listarUsuarios(rol === 'todos' ? undefined : rol)
+      .then((datos) => setUsuarios(datos))
+      .catch((err) => setErrorCarga(err.message));
+
+  // Al abrir la página: usuarios y boletas en paralelo. Con las boletas se cuenta cuántas compras
+  // tiene cada usuario en una sola llamada (en vez de pedir el historial de cada uno).
+  useEffect(() => {
+    Promise.all([listarUsuarios(), listarBoletas()])
+      .then(([listaUsuarios, listaBoletas]) => {
+        setUsuarios(listaUsuarios);
+        setBoletas(listaBoletas);
+      })
+      .catch((err) => setErrorCarga(err.message))
+      .finally(() => setCargando(false));
+  }, []);
+
+  // Al cambiar el filtro se vuelve a pedir la lista al backend con ?rol=
+  const handleCambiarFiltroRol = (rol) => {
+    setFiltroRol(rol);
+    cargarUsuarios(rol);
+  };
+
+  // Compras de un usuario: boletas cuyo "usuario" es él (las de visitantes tienen usuario = null)
+  const contarCompras = (user) => boletas.filter((b) => b.usuario?.id === user.id).length;
 
   const esUsuarioActual = (user) => user?.id === adminActual?.id;
 
@@ -76,9 +109,17 @@ export default function AdminUsuarios() {
     setModoModal('editar');
   };
 
+  // Abre el historial y lo pide al backend: GET /boletas/usuario/{id}
   const handleAbrirVer = (user) => {
     setUsuarioSel(user);
     setModoModal('ver');
+    setHistorial([]);
+    setErrorHistorial('');
+    setCargandoHistorial(true);
+    historialUsuario(user.id)
+      .then((datos) => setHistorial(datos))
+      .catch((err) => setErrorHistorial(err.message))
+      .finally(() => setCargandoHistorial(false));
   };
 
   const handleCerrarModal = () => {
@@ -86,7 +127,8 @@ export default function AdminUsuarios() {
     setUsuarioSel(null);
   };
 
-  // Mismas reglas que el registro de la tienda (RF1 y ERS 3.3.2), más correo único
+  // Mismas reglas que el registro de la tienda (RF1 y ERS 3.3.2). El correo repetido lo revisa
+  // el backend (409) y su mensaje se muestra en la misma lista de errores.
   const validarFormulario = () => {
     const mensajes = [];
     if (modoModal === 'crear') {
@@ -95,81 +137,77 @@ export default function AdminUsuarios() {
       const errorNombre = validarNombreCompleto(form.nombre, form.apellidos);
       if (errorNombre) mensajes.push(errorNombre);
       if (!esCorreoValido(form.correo)) mensajes.push('Ingresa un correo electrónico válido');
+      if (!form.fechaNacimiento) mensajes.push('La fecha de nacimiento es obligatoria');
       if (form.password && !esPasswordSegura(form.password)) {
         mensajes.push('La contraseña debe tener mínimo 8 caracteres, combinando letras y números');
       }
     }
-    const existente = esCorreoValido(form.correo) ? obtenerUsuarioPorCorreo(form.correo) : null;
-    if (existente && existente.id !== form.id) mensajes.push('Ya existe un usuario con ese correo');
+    // Protección de la propia cuenta: el admin no puede dejarse sin permisos
     if (esUsuarioActual(form) && form.rol !== ROLES.ADMIN) {
       mensajes.push('No puedes quitarte el rol de administrador a ti mismo');
     }
     return mensajes;
   };
 
-  const handleGuardar = (e) => {
+  // POST /usuarios (crear) o PUT /usuarios/{id} (editar) con el formato UsuarioRequest
+  const handleGuardar = async (e) => {
     e.preventDefault();
 
     const mensajes = validarFormulario();
     setErrores(mensajes);
     if (mensajes.length > 0) return;
 
-    if (modoModal === 'crear') {
-      crearUsuario({
-        nombre: form.nombre.trim(),
-        apellidos: form.apellidos.trim(),
-        correo: form.correo,
-        password: form.password,
-        fechaNacimiento: form.fechaNacimiento,
-        rol: form.rol
-      });
-    } else if (modoModal === 'editar') {
-      actualizarUsuario(form.id, {
-        nombre: form.nombre.trim(),
-        apellidos: form.apellidos.trim(),
-        correo: form.correo.trim().toLowerCase(),
-        rol: form.rol,
-        ...(form.password && { password: form.password })
-      });
-    }
+    const datos = {
+      nombre: form.nombre.trim(),
+      apellidos: form.apellidos.trim(),
+      correo: form.correo.trim(),
+      // Al editar, vacía = el backend mantiene la contraseña actual
+      password: form.password,
+      fechaNacimiento: form.fechaNacimiento,
+      rol: form.rol, // "ADMIN", "VENDEDOR" o "CLIENTE"
+    };
 
-    cargarDatos();
-    handleCerrarModal();
+    setGuardando(true);
+    try {
+      if (modoModal === 'crear') {
+        await crearUsuario(datos);
+      } else {
+        const actualizado = await actualizarUsuario(form.id, datos);
+        // Si el admin se editó a sí mismo, la Navbar muestra sus datos nuevos
+        if (esUsuarioActual(actualizado)) actualizarUsuarioSesion(actualizado);
+      }
+      await cargarUsuarios(filtroRol);
+      handleCerrarModal();
+    } catch (err) {
+      // Ej: 409 "Ya existe un usuario registrado con el correo ...", 400 menor de edad
+      setErrores([err.message]);
+    } finally {
+      setGuardando(false);
+    }
   };
 
-  const handleEliminar = (user) => {
+  // DELETE /usuarios/{id}. El backend responde 409 si el usuario tiene boletas
+  const handleEliminar = async (user) => {
     if (esUsuarioActual(user)) {
       setErrorTabla('No puedes eliminar tu propia cuenta mientras tienes la sesión iniciada');
       return;
     }
-    if (window.confirm('¿Estás seguro de eliminar este usuario?')) {
-      eliminarUsuario(user.id);
+    if (!window.confirm('¿Estás seguro de eliminar este usuario?')) return;
+
+    try {
+      await eliminarUsuario(user.id);
       setErrorTabla('');
-      cargarDatos();
+      await cargarUsuarios(filtroRol);
+    } catch (err) {
+      setErrorTabla(err.message);
     }
   };
 
-  // Obtener compras asociadas al usuario usando id o correo
-  const obtenerComprasDeUsuario = (user) => {
-    if (!user) return [];
-    const porId = obtenerOrdenesPorUsuario(user.id);
-    if (porId.length > 0) return ordenarPorFechaDesc(porId);
-    // Compras hechas como visitante con el mismo correo
-    return ordenarPorFechaDesc(
-      ordenes.filter((ord) => ord.cliente.correo.toLowerCase() === user.correo.toLowerCase())
-    );
-  };
-
+  // La búsqueda por texto se hace en el navegador sobre la lista que ya llegó (filtrada por rol)
   const usuariosFiltrados = usuarios.filter((u) => {
     const texto = busqueda.toLowerCase();
     const nombreCompleto = `${u.nombre || ''} ${u.apellidos || ''}`.toLowerCase();
-    const coincideTexto =
-      nombreCompleto.includes(texto) ||
-      (u.correo || '').toLowerCase().includes(texto);
-
-    const coincideRol = filtroRol === 'todos' || u.rol === filtroRol;
-
-    return coincideTexto && coincideRol;
+    return nombreCompleto.includes(texto) || (u.correo || '').toLowerCase().includes(texto);
   });
 
   return (
@@ -208,8 +246,9 @@ export default function AdminUsuarios() {
           <div className="col-md-4">
             <select
               className="form-select bg-dark text-light border-secondary"
+              aria-label="Filtrar por rol"
               value={filtroRol}
-              onChange={(e) => setFiltroRol(e.target.value)}
+              onChange={(e) => handleCambiarFiltroRol(e.target.value)}
             >
               <option value="todos">Todos los roles</option>
               <option value={ROLES.ADMIN}>Administradores</option>
@@ -232,7 +271,10 @@ export default function AdminUsuarios() {
         </div>
       )}
 
-      {/* Tabla de Usuarios */}
+      <EstadoCarga cargando={cargando} error={errorCarga} />
+
+      {/* Tabla de Usuarios (cuando ya terminó la carga sin errores) */}
+      {!cargando && !errorCarga && (
       <div className="card bg-dark border-secondary shadow-sm">
         <div className="table-responsive">
           <table className="table table-dark table-hover align-middle mb-0">
@@ -255,7 +297,7 @@ export default function AdminUsuarios() {
                 </tr>
               ) : (
                 usuariosFiltrados.map((u) => {
-                  const compras = obtenerComprasDeUsuario(u);
+                  const compras = contarCompras(u);
 
                   return (
                     <tr key={u.id}>
@@ -282,7 +324,7 @@ export default function AdminUsuarios() {
                       </td>
                       <td className="text-center">
                         <span className="badge bg-dark border border-info text-info">
-                          {compras.length} compra(s)
+                          {compras} compra(s)
                         </span>
                       </td>
                       <td className="text-center">
@@ -318,6 +360,7 @@ export default function AdminUsuarios() {
           </table>
         </div>
       </div>
+      )}
 
       {/* Modal de Crear / Editar / Ver Historial */}
       {modoModal && (
@@ -349,7 +392,8 @@ export default function AdminUsuarios() {
                   </div>
 
                   <h6 className="fw-bold text-info mb-3">Historial de Órdenes Realizadas</h6>
-                  {obtenerComprasDeUsuario(usuarioSel).length === 0 ? (
+                  <EstadoCarga cargando={cargandoHistorial} error={errorHistorial} />
+                  {!cargandoHistorial && !errorHistorial && (historial.length === 0 ? (
                     <div className="alert alert-dark text-center text-muted border-secondary">
                       Este usuario aún no ha realizado compras en la tienda.
                     </div>
@@ -366,12 +410,12 @@ export default function AdminUsuarios() {
                           </tr>
                         </thead>
                         <tbody>
-                          {obtenerComprasDeUsuario(usuarioSel).map((ord) => (
+                          {historial.map((ord) => (
                             <tr key={ord.id}>
                               <td className="fw-bold text-info">#{ord.numeroOrden}</td>
                               <td className="small">{formatearFecha(ord.fecha)}</td>
                               <td className="small">
-                                {ord.items.map((i) => `${i.nombre} (x${i.cantidad})`).join(', ')}
+                                {ord.detalles.map((d) => `${d.producto?.nombre} (x${d.cantidad})`).join(', ')}
                               </td>
                               <td><EstadoOrden estado={ord.estado} /></td>
                               <td className="text-end fw-bold text-success">
@@ -382,7 +426,7 @@ export default function AdminUsuarios() {
                         </tbody>
                       </table>
                     </div>
-                  )}
+                  ))}
                 </div>
               ) : (
                 <form onSubmit={handleGuardar} noValidate>
@@ -450,27 +494,24 @@ export default function AdminUsuarios() {
                           onChange={(e) => setForm({ ...form, password: e.target.value })}
                         />
                       </div>
-                      {modoModal === 'crear' && (
-                        <>
-                          <div className="col-md-6">
-                            <label className="form-label text-secondary small fw-bold">Fecha de Nacimiento</label>
-                            <input
-                              type="date"
-                              className="form-control bg-dark text-light border-secondary"
-                              required
-                              value={form.fechaNacimiento}
-                              onChange={(e) => setForm({ ...form, fechaNacimiento: e.target.value })}
-                            />
-                          </div>
-                        </>
-                      )}
+                      {/* Se muestra al crear y al editar: UsuarioRequest del backend siempre la exige */}
+                      <div className="col-md-6">
+                        <label className="form-label text-secondary small fw-bold">Fecha de Nacimiento</label>
+                        <input
+                          type="date"
+                          className="form-control bg-dark text-light border-secondary"
+                          required
+                          value={form.fechaNacimiento}
+                          onChange={(e) => setForm({ ...form, fechaNacimiento: e.target.value })}
+                        />
+                      </div>
                     </div>
                   </div>
                   <div className="modal-footer border-secondary">
                     <button type="button" className="btn btn-outline-secondary" onClick={handleCerrarModal}>
                       Cancelar
                     </button>
-                    <button type="submit" className="btn btn-info fw-bold">
+                    <button type="submit" className="btn btn-info fw-bold" disabled={guardando}>
                       {modoModal === 'crear' ? 'Crear Usuario' : 'Guardar Cambios'}
                     </button>
                   </div>

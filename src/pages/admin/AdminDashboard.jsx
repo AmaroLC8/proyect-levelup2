@@ -1,10 +1,9 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { obtenerOrdenes, obtenerOrdenesPagadas, ordenarPorFechaDesc } from '../../data/ordenes';
-import { obtenerProductos, obtenerProductosCriticos } from '../../data/productos';
-import { obtenerUsuarios } from '../../data/usuarios';
+import { obtenerDashboard } from '../../services/reportesService';
 import { formatearDinero } from '../../utils/formato';
 import EstadoOrden from '../../components/EstadoOrden';
+import EstadoCarga from '../../components/EstadoCarga';
 
 // Accesos a cada sección del panel (Figura 9 de la pauta)
 const SECCIONES = [
@@ -17,29 +16,51 @@ const SECCIONES = [
 ];
 
 export default function AdminDashboard() {
-  // Métricas calculadas en cada render a partir de los datos guardados (RF13)
-  const ordenes = obtenerOrdenes();
-  const totalVentas = obtenerOrdenesPagadas().reduce((acc, ord) => acc + ord.total, 0);
-  const totalProductos = obtenerProductos().length;
-  const totalUsuarios = obtenerUsuarios().length;
-  const criticos = obtenerProductosCriticos();
-  const ultimasOrdenes = ordenarPorFechaDesc(ordenes).slice(0, 5);
+  // Métricas del panel (RF13): las calcula el backend en GET /reportes/dashboard
+  const [datos, setDatos] = useState(null);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    obtenerDashboard()
+      .then((respuesta) => setDatos(respuesta))
+      .catch((err) => setError(err.message))
+      .finally(() => setCargando(false));
+  }, []);
+
+  const encabezado = (
+    <div className="mb-4">
+      <h2 className="fw-bold text-info mb-1">
+        <i className="bi bi-speedometer2 me-2"></i>Panel de Administración
+      </h2>
+      <p className="text-secondary">Resumen de las actividades de Level-Up Gamer.</p>
+    </div>
+  );
+
+  // Mientras llegan los datos (o si el backend no responde) solo se muestra el estado de la carga
+  if (cargando || error) {
+    return (
+      <div className="container-fluid text-light">
+        {encabezado}
+        <EstadoCarga cargando={cargando} error={error} />
+      </div>
+    );
+  }
+
+  const criticos = datos.productosCriticos;
+  const ultimasOrdenes = datos.ultimasOrdenes; // las 5 más recientes, de cualquier estado
 
   const kpis = [
-    { titulo: 'Ventas totales', valor: formatearDinero(totalVentas), icono: 'bi-currency-dollar', color: 'success' },
-    { titulo: 'Órdenes realizadas', valor: ordenes.length, icono: 'bi-receipt', color: 'info' },
-    { titulo: 'Productos en catálogo', valor: totalProductos, icono: 'bi-box-seam', color: 'primary' },
-    { titulo: 'Usuarios registrados', valor: totalUsuarios, icono: 'bi-people', color: 'warning' },
+    // ventasTotales solo suma las boletas PAGADAS; ordenesRealizadas cuenta también las rechazadas
+    { titulo: 'Ventas totales', valor: formatearDinero(datos.ventasTotales), icono: 'bi-currency-dollar', color: 'success' },
+    { titulo: 'Órdenes realizadas', valor: datos.ordenesRealizadas, icono: 'bi-receipt', color: 'info' },
+    { titulo: 'Productos en catálogo', valor: datos.totalProductos, icono: 'bi-box-seam', color: 'primary' },
+    { titulo: 'Usuarios registrados', valor: datos.totalUsuarios, icono: 'bi-people', color: 'warning' },
   ];
 
   return (
     <div className="container-fluid text-light">
-      <div className="mb-4">
-        <h2 className="fw-bold text-info mb-1">
-          <i className="bi bi-speedometer2 me-2"></i>Panel de Administración
-        </h2>
-        <p className="text-secondary">Resumen de las actividades de Level-Up Gamer.</p>
-      </div>
+      {encabezado}
 
       {/* Tarjetas de métricas */}
       <div className="row g-3 mb-4">
@@ -111,7 +132,7 @@ export default function AdminDashboard() {
                             #{ord.numeroOrden}
                           </Link>
                         </td>
-                        <td>{ord.cliente.nombre} {ord.cliente.apellidos}</td>
+                        <td>{ord.nombreCliente} {ord.apellidosCliente}</td>
                         <td className="fw-bold text-success">{formatearDinero(ord.total)}</td>
                         <td className="text-center"><EstadoOrden estado={ord.estado} /></td>
                       </tr>
@@ -148,7 +169,7 @@ export default function AdminDashboard() {
                       <div>
                         <span className="fw-semibold d-block">{prod.nombre}</span>
                         <small className="text-secondary">
-                          {prod.categoria} · crítico: {prod.stockCritico} u.
+                          {prod.categoria?.nombre} · crítico: {prod.stockCritico} u.
                         </small>
                       </div>
                       <span className="badge bg-danger fs-6 px-2 py-1">Stock: {prod.stock}</span>

@@ -9,6 +9,10 @@ import ProductCard from '../components/ProductCard';
 import Carrito from '../pages/Carrito';
 import Checkout from '../pages/Checkout';
 import AdminDashboard from '../pages/admin/AdminDashboard';
+import { simularReportes } from './panelSimulado';
+
+// El dashboard pide sus métricas a GET /reportes/dashboard: se simula el service
+vi.mock('../services/reportesService');
 
 // Mock del Contexto de Carrito para simular funciones y estados
 const mockAgregarAlCarrito = vi.fn();
@@ -203,7 +207,8 @@ describe('Suite de Pruebas Unitarias - Level-Up Gamer (10/10 Requeridas)', () =>
   // GRUPO 5: LÓGICA DE NEGOCIO Y DASHBOARD ADMIN
   // ==========================================
 
-  it('10. Debe renderizar correctamente el título y las métricas del panel de administración', () => {
+  it('10. Debe renderizar correctamente el título y las métricas del panel de administración', async () => {
+    simularReportes();
     render(
       <BrowserRouter>
         <AdminDashboard />
@@ -211,7 +216,8 @@ describe('Suite de Pruebas Unitarias - Level-Up Gamer (10/10 Requeridas)', () =>
     );
 
     expect(screen.getByText(/panel de administración/i)).toBeInTheDocument();
-    expect(screen.getByText(/órdenes realizadas/i)).toBeInTheDocument();
+    // Las métricas llegan del backend (simulado): se espera a que aparezcan
+    expect(await screen.findByText(/órdenes realizadas/i)).toBeInTheDocument();
     expect(screen.getByText(/alertas de inventario/i)).toBeInTheDocument();
   });
 });

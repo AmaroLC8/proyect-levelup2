@@ -145,20 +145,12 @@ describe('Pruebas de componentes reutilizables', () => {
   });
 
   describe('EstadoOrden', () => {
-    it('muestra una etiqueta verde para órdenes pagadas y roja para rechazadas', () => {
-      const { rerender } = render(<EstadoOrden estado="pagada" />);
+    it('muestra una etiqueta verde para PAGADA y roja para RECHAZADA (estados del backend)', () => {
+      const { rerender } = render(<EstadoOrden estado="PAGADA" />);
       expect(screen.getByText('Pagada')).toHaveClass('badge', 'bg-success');
 
-      rerender(<EstadoOrden estado="rechazada" />);
-      expect(screen.getByText('Rechazada')).toHaveClass('badge', 'bg-danger');
-    });
-
-    it('entiende los estados en mayúsculas que envía el backend (PAGADA y RECHAZADA)', () => {
-      const { rerender } = render(<EstadoOrden estado="PAGADA" />);
-      expect(screen.getByText('Pagada')).toHaveClass('bg-success');
-
       rerender(<EstadoOrden estado="RECHAZADA" />);
-      expect(screen.getByText('Rechazada')).toHaveClass('bg-danger');
+      expect(screen.getByText('Rechazada')).toHaveClass('badge', 'bg-danger');
     });
 
     it('muestra un estado desconocido en gris sin romper la vista', () => {

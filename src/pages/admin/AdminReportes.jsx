@@ -1,49 +1,38 @@
-import React from 'react';
-import { obtenerOrdenes, obtenerOrdenesPagadas } from '../../data/ordenes';
-import { obtenerProductoPorId } from '../../data/productos';
+import React, { useEffect, useState } from 'react';
+import { obtenerReporteVentas } from '../../services/reportesService';
 import { formatearDinero } from '../../utils/formato';
 import Button from '../../components/Button';
+import EstadoCarga from '../../components/EstadoCarga';
 
 export default function AdminReportes() {
-  // Solo las órdenes pagadas cuentan como ventas (RF19)
-  const ordenes = obtenerOrdenesPagadas();
-  const rechazadas = obtenerOrdenes().length - ordenes.length;
+  // Reporte de ventas (RF19): lo calcula el backend en GET /reportes/ventas.
+  // Solo las boletas PAGADAS cuentan como ventas; las rechazadas solo aparecen en pagosRechazados.
+  const [reporte, setReporte] = useState(null);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState('');
 
-  // 1. Cálculos de métricas clave
-  const totalVentas = ordenes.reduce((acc, o) => acc + o.total, 0);
-  const totalOrdenes = ordenes.length;
-  const ticketPromedio = totalOrdenes > 0 ? Math.round(totalVentas / totalOrdenes) : 0;
-  const totalDescuentos = ordenes.reduce((acc, o) => acc + (o.descuento || 0), 0);
+  useEffect(() => {
+    obtenerReporteVentas()
+      .then((datos) => setReporte(datos))
+      .catch((err) => setError(err.message))
+      .finally(() => setCargando(false));
+  }, []);
 
-  const todosLosItems = ordenes.flatMap((o) => o.items);
-  const unidadesVendidas = todosLosItems.reduce((acc, item) => acc + item.cantidad, 0);
+  // Mientras no hay reporte se usan listas vacías, así la página se dibuja igual
+  const ventasPorCategoria = reporte?.ventasPorCategoria ?? []; // [{ categoria, monto }], de mayor a menor
+  const rankingProductos = reporte?.rankingProductos ?? []; // [{ productoId, nombre, unidades, monto }]
 
-  // 2. Ingresos por categoría: la orden no guarda la categoría, se busca en el producto
-  const ventasPorCategoria = todosLosItems.reduce((acc, item) => {
-    const cat = obtenerProductoPorId(item.id)?.categoria ?? 'Producto eliminado';
-    acc[cat] = (acc[cat] || 0) + item.precio * item.cantidad;
-    return acc;
-  }, {});
-  const totalPorCategorias = Object.values(ventasPorCategoria).reduce((a, b) => a + b, 0);
+  // El % de cada categoría se calcula sobre la suma de las categorías (montos antes del descuento Duoc)
+  const totalPorCategorias = ventasPorCategoria.reduce((suma, fila) => suma + fila.monto, 0);
 
-  // 3. Ranking de productos más vendidos
-  const conteoProductos = todosLosItems.reduce((acc, item) => {
-    if (!acc[item.id]) acc[item.id] = { nombre: item.nombre, cantidad: 0, total: 0 };
-    acc[item.id].cantidad += item.cantidad;
-    acc[item.id].total += item.precio * item.cantidad;
-    return acc;
-  }, {});
-
-  const rankingProductos = Object.values(conteoProductos)
-    .sort((a, b) => b.cantidad - a.cantidad)
-    .slice(0, 5);
-
-  const kpis = [
-    { titulo: 'Ingresos totales', valor: formatearDinero(totalVentas), nota: `${totalOrdenes} órdenes pagadas`, color: 'success' },
-    { titulo: 'Ticket promedio', valor: formatearDinero(ticketPromedio), nota: 'Por compra pagada', color: 'info' },
-    { titulo: 'Unidades vendidas', valor: `${unidadesVendidas} un.`, nota: `${rechazadas} pagos rechazados`, color: 'light' },
-    { titulo: 'Descuentos Duoc', valor: formatearDinero(totalDescuentos), nota: 'Ahorro de clientes', color: 'warning' },
-  ];
+  const kpis = reporte
+    ? [
+        { titulo: 'Ingresos totales', valor: formatearDinero(reporte.ingresosTotales), nota: `${reporte.ordenesPagadas} órdenes pagadas`, color: 'success' },
+        { titulo: 'Ticket promedio', valor: formatearDinero(reporte.ticketPromedio), nota: 'Por compra pagada', color: 'info' },
+        { titulo: 'Unidades vendidas', valor: `${reporte.unidadesVendidas} un.`, nota: `${reporte.pagosRechazados} pagos rechazados`, color: 'light' },
+        { titulo: 'Descuentos Duoc', valor: formatearDinero(reporte.totalDescuentos), nota: 'Ahorro de clientes', color: 'warning' },
+      ]
+    : [];
 
   return (
     <div className="container-fluid text-light">
@@ -62,6 +51,10 @@ export default function AdminReportes() {
         </Button>
       </div>
 
+      <EstadoCarga cargando={cargando} error={error} />
+
+      {reporte && (
+      <>
       <div className="row g-3 mb-4">
         {kpis.map((kpi) => (
           <div className="col-12 col-sm-6 col-xl-3" key={kpi.titulo}>
@@ -84,22 +77,21 @@ export default function AdminReportes() {
               <p className="text-secondary text-center py-4">No hay ventas registradas aún.</p>
             ) : (
               <div className="d-flex flex-column gap-3">
-                {Object.entries(ventasPorCategoria)
-                  .sort(([, a], [, b]) => b - a)
-                  .map(([cat, monto]) => {
-                    const pct = Math.round((monto / totalPorCategorias) * 100);
-                    return (
-                      <div key={cat}>
-                        <div className="d-flex justify-content-between text-light small mb-1">
-                          <span className="fw-semibold">{cat}</span>
-                          <span>{formatearDinero(monto)} ({pct}%)</span>
-                        </div>
-                        <div className="progress bg-secondary" style={{ height: '8px' }}>
-                          <div className="progress-bar bg-info" role="progressbar" style={{ width: `${pct}%` }}></div>
-                        </div>
+                {/* El backend ya las entrega ordenadas de mayor a menor */}
+                {ventasPorCategoria.map(({ categoria, monto }) => {
+                  const pct = Math.round((monto / totalPorCategorias) * 100);
+                  return (
+                    <div key={categoria}>
+                      <div className="d-flex justify-content-between text-light small mb-1">
+                        <span className="fw-semibold">{categoria}</span>
+                        <span>{formatearDinero(monto)} ({pct}%)</span>
                       </div>
-                    );
-                  })}
+                      <div className="progress bg-secondary" style={{ height: '8px' }}>
+                        <div className="progress-bar bg-info" role="progressbar" style={{ width: `${pct}%` }}></div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -125,13 +117,13 @@ export default function AdminReportes() {
                   </thead>
                   <tbody>
                     {rankingProductos.map((prod, idx) => (
-                      <tr key={prod.nombre}>
+                      <tr key={prod.productoId}>
                         <td className="fw-bold text-info">{idx + 1}</td>
                         <td className="fw-semibold">{prod.nombre}</td>
                         <td className="text-center">
-                          <span className="badge bg-primary">{prod.cantidad} un.</span>
+                          <span className="badge bg-primary">{prod.unidades} un.</span>
                         </td>
-                        <td className="text-end fw-bold text-success">{formatearDinero(prod.total)}</td>
+                        <td className="text-end fw-bold text-success">{formatearDinero(prod.monto)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -141,6 +133,8 @@ export default function AdminReportes() {
           </div>
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }

@@ -3,8 +3,11 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { AuthProvider } from '../context/AuthContext';
 import { CartProvider, useCart } from '../context/CartContext';
-import { obtenerProductoPorId } from '../data/productos';
 import { simularAuth, simularSesion, PEDRO } from './sesionSimulada';
+import { PRODUCTOS_PRUEBA } from './backendSimulado';
+
+// Productos con el formato del backend (mismos datos que carga el DataInitializer)
+const obtenerProductoPorId = (id) => PRODUCTOS_PRUEBA.find((p) => p.id === id);
 
 // La sesión viene del backend (JWT): se simula authService para no llamar al backend real
 vi.mock('../services/authService');

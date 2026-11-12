@@ -120,6 +120,11 @@ export const simularBoletas = () => {
     return copia(db.boletas.filter((b) => b.usuario?.id === usuario.id));
   });
 
+  // GET /boletas/usuario/{id}: boletas de ese usuario (lista vacía si no ha comprado)
+  vi.mocked(boletasService.historialUsuario).mockImplementation(async (usuarioId) =>
+    copia(db.boletas.filter((b) => b.usuario?.id === Number(usuarioId)))
+  );
+
   return {
     get boletas() { return db.boletas; },
     get productos() { return db.productos; },

@@ -96,7 +96,7 @@ export default function App() {
             <footer className="py-4 text-center text-secondary border-top border-secondary" style={{ backgroundColor: '#0b0d14' }}>
               <div className="container">
                 <p className="mb-1 text-light fw-bold">LEVEL-UP GAMER © 2026 - Duoc UC</p>
-                <small>Desarrollo Fullstack II - Evaluación Parcial N° 2</small>
+                <small>Desarrollo Fullstack II - Evaluación Parcial N° 3</small>
               </div>
             </footer>
           </div>

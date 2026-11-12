@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { obtenerPrecioFinal } from '../data/productos';
 import { useAuth } from './AuthContext';
-import { PORCENTAJE_DESCUENTO_DUOC } from '../utils/precios';
+import { obtenerPrecioFinal, PORCENTAJE_DESCUENTO_DUOC } from '../utils/precios';
 
 const CartContext = createContext();
 

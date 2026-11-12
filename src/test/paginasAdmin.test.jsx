@@ -2,19 +2,22 @@ import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 import App from '../App';
-import { obtenerUsuarios } from '../data/usuarios';
-import { crearOrden } from '../data/ordenes';
 import { crearProducto, actualizarProducto, eliminarProducto } from '../services/productosService';
 import { actualizarPerfil } from '../services/authService';
-import { listarBoletas, obtenerBoleta } from '../services/boletasService';
+import { listarBoletas, obtenerBoleta, historialUsuario } from '../services/boletasService';
+import { listarUsuarios, crearUsuario, actualizarUsuario } from '../services/usuariosService';
+import { obtenerDashboard, obtenerReporteVentas } from '../services/reportesService';
 import { simularBackend, simularBackendCaido, errorDelBackend } from './backendSimulado';
 import { simularAuth, simularSesion, ADMIN, VENDEDOR } from './sesionSimulada';
 import { simularBoletas } from './boletasSimuladas';
+import { simularUsuarios, simularReportes } from './panelSimulado';
 
-// La sesión (login con JWT, /auth/me y /auth/perfil) y las boletas también se simulan.
-// El dashboard y los reportes todavía usan las órdenes locales de data/ordenes.js (tarea F4).
+// La sesión (login con JWT, /auth/me y /auth/perfil), las boletas, el mantenedor de usuarios
+// y los reportes también se simulan
 vi.mock('../services/authService');
 vi.mock('../services/boletasService');
+vi.mock('../services/usuariosService');
+vi.mock('../services/reportesService');
 
 // Productos y categorías vienen del backend: se simulan los services (no se llama al backend real).
 // simularBackend() (en beforeEach) les da respuestas con los datos de backendSimulado.js
@@ -41,6 +44,7 @@ const esperarCarga = () =>
 describe('Pruebas del panel de administración', () => {
   let db; // "base de datos" del backend simulado
   let authDb; // usuarios del backend simulado (login y perfil)
+  let usuariosDb; // usuarios del mantenedor (/usuarios)
 
   beforeEach(() => {
     localStorage.clear();
@@ -48,6 +52,8 @@ describe('Pruebas del panel de administración', () => {
     db = simularBackend();
     authDb = simularAuth();
     simularBoletas();
+    usuariosDb = simularUsuarios();
+    simularReportes();
     // Simula que el administrador acepta los mensajes de confirmación al eliminar
     vi.spyOn(window, 'confirm').mockReturnValue(true);
   });
@@ -57,20 +63,39 @@ describe('Pruebas del panel de administración', () => {
   });
 
   describe('Dashboard y menú lateral', () => {
-    it('muestra las métricas reales, los accesos a cada sección y las órdenes más recientes primero (RF13)', () => {
+    it('muestra las métricas de GET /reportes/dashboard, los accesos y las últimas órdenes (RF13)', async () => {
       abrirAdminEn('/admin');
 
-      expect(screen.getByText('$87.372')).toBeInTheDocument(); // 22.392 + 64.980 de las órdenes pagadas
+      await esperarCarga();
+      expect(obtenerDashboard).toHaveBeenCalled();
+      // ventasTotales del backend: solo la boleta pagada; órdenes cuenta también la rechazada
+      expect(screen.getByText('Ventas totales').nextSibling).toHaveTextContent('$102.376');
+      expect(screen.getByText('Órdenes realizadas').nextSibling).toHaveTextContent('2');
+      expect(screen.getByText('Usuarios registrados').nextSibling).toHaveTextContent('3');
       ['Órdenes', 'Productos', 'Categorías', 'Usuarios', 'Reportes', 'Perfil'].forEach((seccion) =>
         expect(screen.getAllByRole('link', { name: new RegExp(seccion) }).length).toBeGreaterThan(0)
       );
-      const numeros = screen.getAllByRole('link', { name: /^#\d{8}-\d{3}$/ }).map((enlace) => enlace.textContent);
-      expect(numeros).toEqual(['#20261012-002', '#20261001-001']);
+      // Últimas órdenes en el orden en que las envía el backend, con enlace al id real de la boleta
+      const enlaces = screen.getAllByRole('link', { name: /^#\d{8}-\d{3}$/ });
+      expect(enlaces.map((enlace) => enlace.textContent)).toEqual(['#20261112-002', '#20261112-001']);
+      expect(enlaces[1]).toHaveAttribute('href', '/admin/ordenes/1');
+      expect(within(filaCon('#20261112-001')).getByText('Pedro Hacker')).toBeInTheDocument();
+      // Productos críticos, con el nombre de su categoría (objeto en el backend)
       expect(screen.getByText('5 críticos')).toBeInTheDocument();
+      expect(screen.getByText('Sillas · crítico: 5 u.')).toBeInTheDocument();
     });
 
-    it('el menú lateral permite volver a la tienda y cerrar sesión', () => {
+    it('si el backend no responde, el dashboard muestra el error', async () => {
+      vi.mocked(obtenerDashboard).mockRejectedValueOnce(new Error('No se pudo conectar con el servidor.'));
       abrirAdminEn('/admin');
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo conectar con el servidor.');
+      expect(screen.getByText('Panel de Administración')).toBeInTheDocument();
+    });
+
+    it('el menú lateral permite volver a la tienda y cerrar sesión', async () => {
+      abrirAdminEn('/admin');
+      await esperarCarga();
       expect(screen.getByRole('link', { name: /ver tienda/i })).toHaveAttribute('href', '/');
 
       // La Navbar también tiene "Cerrar sesión": se usa el botón del menú lateral (el que no está en <nav>)
@@ -224,70 +249,127 @@ describe('Pruebas del panel de administración', () => {
   });
 
   describe('Usuarios (RF18)', () => {
-    it('al crear un usuario aplica las reglas del registro', () => {
+    // Llena el modal de usuario: [nombre, apellidos, correo, contraseña, fecha de nacimiento]
+    const llenarUsuario = ({ nombre, apellidos, correo, password, fecha }) => {
+      const [campoNombre, campoApellidos, campoCorreo, campoPassword, campoFecha] = camposDeVentana();
+      escribirEn(campoNombre, nombre);
+      escribirEn(campoApellidos, apellidos);
+      escribirEn(campoCorreo, correo);
+      escribirEn(campoPassword, password);
+      escribirEn(campoFecha, fecha);
+    };
+
+    it('lista los usuarios del backend con su rol y sus compras, y filtra por rol con ?rol=', async () => {
       abrirAdminEn('/admin/usuarios');
+      await esperarCarga();
+
+      expect(screen.getByText('Total: 3')).toBeInTheDocument();
+      expect(within(filaCon('vendedor@levelup.cl')).getByText('Vendedor')).toBeInTheDocument();
+      // Compras contadas con GET /boletas: Pedro tiene 1 boleta a su nombre
+      expect(within(filaCon('pedro@duocuc.cl')).getByText('1 compra(s)')).toBeInTheDocument();
+
+      fireEvent.change(screen.getByLabelText('Filtrar por rol'), { target: { value: 'VENDEDOR' } });
+      expect(await screen.findByText('Total: 1')).toBeInTheDocument();
+      expect(listarUsuarios).toHaveBeenLastCalledWith('VENDEDOR');
+      expect(screen.queryByText('pedro@duocuc.cl')).not.toBeInTheDocument();
+    });
+
+    it('crea un usuario con el rol elegido y aplica antes las reglas del registro', async () => {
+      abrirAdminEn('/admin/usuarios');
+      await esperarCarga();
       fireEvent.click(screen.getByRole('button', { name: /nuevo usuario/i }));
 
-      const [nombre, apellidos, correo, password, fecha] = camposDeVentana();
-      escribirEn(nombre, 'Diego');
-      escribirEn(apellidos, 'Rojas');
-      escribirEn(correo, 'pedro@duocuc.cl');
-      escribirEn(password, 'abc');
-      escribirEn(fecha, '2012-06-01');
+      llenarUsuario({ nombre: 'Diego', apellidos: 'Rojas', correo: 'diego@gmail.com', password: 'abc', fecha: '2012-06-01' });
       fireEvent.click(within(ventana()).getByRole('button', { name: /crear usuario/i }));
-
       const errores = within(ventana()).getAllByRole('listitem').map((item) => item.textContent);
       expect(errores).toEqual(expect.arrayContaining([
         'Debes ser mayor de 18 años para registrarte',
         'Mínimo 8 caracteres, combinando letras y números',
-        'Ya existe un usuario con ese correo',
       ]));
+      expect(crearUsuario).not.toHaveBeenCalled();
 
-      escribirEn(correo, 'diego@gmail.com');
-      escribirEn(password, 'diego1234');
-      escribirEn(fecha, '1999-06-01');
+      llenarUsuario({ nombre: 'Diego', apellidos: 'Rojas', correo: 'diego@gmail.com', password: 'diego1234', fecha: '1999-06-01' });
+      fireEvent.change(ventana().querySelector('select'), { target: { value: 'VENDEDOR' } });
       fireEvent.click(within(ventana()).getByRole('button', { name: /crear usuario/i }));
-      expect(screen.getByText('diego@gmail.com')).toBeInTheDocument();
-      expect(obtenerUsuarios()).toHaveLength(3);
+
+      await waitFor(() => expect(ventana()).toBeNull());
+      // Formato UsuarioRequest: rol en mayúsculas y contraseña obligatoria al crear
+      expect(crearUsuario).toHaveBeenCalledWith({
+        nombre: 'Diego', apellidos: 'Rojas', correo: 'diego@gmail.com',
+        password: 'diego1234', fechaNacimiento: '1999-06-01', rol: 'VENDEDOR',
+      });
+      expect(await screen.findByText('diego@gmail.com')).toBeInTheDocument();
+      expect(usuariosDb.usuarios).toHaveLength(4);
     });
 
-    it('protege la cuenta del administrador con sesión iniciada', () => {
+    it('muestra el error 409 del backend si el correo ya está registrado', async () => {
       abrirAdminEn('/admin/usuarios');
+      await esperarCarga();
+      fireEvent.click(screen.getByRole('button', { name: /nuevo usuario/i }));
+
+      llenarUsuario({ nombre: 'Diego', apellidos: 'Rojas', correo: 'pedro@duocuc.cl', password: 'diego1234', fecha: '1999-06-01' });
+      fireEvent.click(within(ventana()).getByRole('button', { name: /crear usuario/i }));
+
+      expect(await within(ventana()).findByText('Ya existe un usuario registrado con el correo pedro@duocuc.cl')).toBeInTheDocument();
+      expect(usuariosDb.usuarios).toHaveLength(3);
+    });
+
+    it('al editar, la contraseña vacía se envía para mantener la actual', async () => {
+      abrirAdminEn('/admin/usuarios');
+      await esperarCarga();
+      fireEvent.click(within(filaCon('vendedor@levelup.cl')).getByTitle('Editar'));
+
+      expect(camposDeVentana()[4]).toHaveValue('1998-03-15'); // la fecha también se edita
+      escribirEn(camposDeVentana()[0], 'Sofía');
+      fireEvent.click(within(ventana()).getByRole('button', { name: /guardar cambios/i }));
+
+      await waitFor(() => expect(ventana()).toBeNull());
+      expect(actualizarUsuario).toHaveBeenCalledWith(2, expect.objectContaining({ nombre: 'Sofía', password: '', rol: 'VENDEDOR' }));
+      expect(await screen.findByText('Sofía Level-Up')).toBeInTheDocument();
+    });
+
+    it('muestra el error 409 del backend al eliminar un usuario con boletas', async () => {
+      abrirAdminEn('/admin/usuarios');
+      await esperarCarga();
+
+      fireEvent.click(within(filaCon('pedro@duocuc.cl')).getByTitle('Eliminar'));
+      expect(await screen.findByText("No se puede eliminar al usuario 'pedro@duocuc.cl' porque tiene boletas asociadas")).toBeInTheDocument();
+      expect(screen.getByText('pedro@duocuc.cl')).toBeInTheDocument();
+
+      // Un usuario sin boletas sí se elimina
+      fireEvent.click(within(filaCon('vendedor@levelup.cl')).getByTitle('Eliminar'));
+      await waitFor(() => expect(screen.queryByText('vendedor@levelup.cl')).not.toBeInTheDocument());
+      expect(usuariosDb.usuarios).toHaveLength(2);
+    });
+
+    it('protege la cuenta del administrador con sesión iniciada', async () => {
+      abrirAdminEn('/admin/usuarios');
+      await esperarCarga();
 
       fireEvent.click(within(filaCon('admin@levelup.cl')).getByTitle('Eliminar'));
       expect(screen.getByText(/no puedes eliminar tu propia cuenta/i)).toBeInTheDocument();
-      expect(obtenerUsuarios()).toHaveLength(2);
+      expect(usuariosDb.usuarios).toHaveLength(3);
 
       fireEvent.click(within(filaCon('admin@levelup.cl')).getByTitle('Editar'));
       fireEvent.change(ventana().querySelector('select'), { target: { value: 'CLIENTE' } });
       fireEvent.click(within(ventana()).getByRole('button', { name: /guardar cambios/i }));
       expect(screen.getByText('No puedes quitarte el rol de administrador a ti mismo')).toBeInTheDocument();
+      expect(actualizarUsuario).not.toHaveBeenCalled();
     });
 
-    it('muestra el historial de compras de un cliente', () => {
+    it('muestra el historial de compras de un cliente con GET /boletas/usuario/{id}', async () => {
       abrirAdminEn('/admin/usuarios');
+      await esperarCarga();
       fireEvent.click(within(filaCon('pedro@duocuc.cl')).getByTitle(/historial/i));
 
-      expect(within(ventana()).getByText('#20261001-001')).toBeInTheDocument();
-      expect(within(ventana()).getByText('Catan El Juego (x1)')).toBeInTheDocument();
+      expect(await within(ventana()).findByText('#20261112-001')).toBeInTheDocument();
+      expect(historialUsuario).toHaveBeenCalledWith(3);
+      expect(within(ventana()).getByText('Catan El Juego (x1), Audífonos Gamer 7.1 Surround (x2)')).toBeInTheDocument();
       expect(within(ventana()).getByText('Pagada')).toBeInTheDocument();
     });
   });
 
   describe('Órdenes, boletas y reportes (RF16 y RF19)', () => {
-    const ordenRechazada = {
-      estado: 'rechazada',
-      usuarioId: null,
-      cliente: {
-        nombre: 'Ana', apellidos: 'Soto', correo: 'error@test.com',
-        calle: 'Av. Siempre Viva 742', depto: '', region: 'Maule', comuna: 'Talca', indicaciones: '',
-      },
-      items: [{ id: 1, nombre: 'PlayStation 5 Slim 1TB', precio: 499990, cantidad: 1 }],
-      subtotal: 499990,
-      descuento: 0,
-      total: 499990,
-    };
-
     it('lista las boletas del backend con estado, fecha, cliente y total', async () => {
       abrirAdminEn('/admin/ordenes');
 
@@ -353,16 +435,34 @@ describe('Pruebas del panel de administración', () => {
       expect(await screen.findByText('BOLETA ELECTRÓNICA')).toBeInTheDocument();
     });
 
-    it('los reportes suman solo las ventas pagadas y agrupan por categoría', () => {
-      crearOrden(ordenRechazada);
+    it('los reportes muestran las métricas de GET /reportes/ventas', async () => {
       abrirAdminEn('/admin/reportes');
 
-      expect(screen.getByText('$87.372')).toBeInTheDocument();
+      // Ingresos y ticket promedio (1 boleta pagada de $102.376)
+      expect(await screen.findAllByText('$102.376')).toHaveLength(2);
+      expect(obtenerReporteVentas).toHaveBeenCalled();
+      expect(screen.getByText('1 órdenes pagadas')).toBeInTheDocument();
+      expect(screen.getByText('3 un.')).toBeInTheDocument();
       expect(screen.getByText('1 pagos rechazados')).toBeInTheDocument();
-      expect(screen.getByText('Juegos de Mesa')).toBeInTheDocument();
+      expect(screen.getByText('$25.594')).toBeInTheDocument(); // descuentos Duoc
+      // Ventas por categoría con su % sobre la suma de categorías (99.980 de 127.970 = 78%)
       expect(screen.getByText('Periféricos')).toBeInTheDocument();
-      // La PS5 solo estaba en la orden rechazada, así que no aparece en el ranking
+      expect(screen.getByText('$99.980 (78%)')).toBeInTheDocument();
+      expect(screen.getByText('$27.990 (22%)')).toBeInTheDocument();
+      // Ranking: primero el más vendido por unidades
+      const filasRanking = within(screen.getAllByRole('table')[0]).getAllByRole('row').slice(1);
+      expect(within(filasRanking[0]).getByText('Audífonos Gamer 7.1 Surround')).toBeInTheDocument();
+      expect(within(filasRanking[0]).getByText('2 un.')).toBeInTheDocument();
+      // La PS5 solo estaba en la boleta rechazada, así que no aparece
       expect(screen.queryByText('PlayStation 5 Slim 1TB')).not.toBeInTheDocument();
+    });
+
+    it('si el backend no responde, los reportes muestran el error', async () => {
+      vi.mocked(obtenerReporteVentas).mockRejectedValueOnce(new Error('No se pudo conectar con el servidor.'));
+      abrirAdminEn('/admin/reportes');
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo conectar con el servidor.');
+      expect(screen.queryByText('Ventas por Categoría')).not.toBeInTheDocument();
     });
   });
 

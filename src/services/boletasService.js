@@ -29,3 +29,9 @@ export const obtenerPorNumero = (numeroOrden) => peticion(`/boletas/numero/${num
 
 /** GET /boletas/mis-compras → las boletas del usuario del token (CLIENTE y ADMIN). */
 export const misCompras = () => peticion('/boletas/mis-compras');
+
+/**
+ * GET /boletas/usuario/{usuarioId} → historial de un usuario, de la más reciente a la más antigua
+ * (lista vacía si no ha comprado). ADMIN puede ver el de cualquiera; un CLIENTE solo el suyo (403 si no).
+ */
+export const historialUsuario = (usuarioId) => peticion(`/boletas/usuario/${usuarioId}`);
