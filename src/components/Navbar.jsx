@@ -3,6 +3,7 @@ import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { formatearDinero } from '../utils/formato';
+import { rutaInicialPorRol } from '../utils/roles';
 
 const ENLACES = [
   { to: '/', texto: 'Home' },
@@ -17,8 +18,23 @@ const ENLACES = [
 export default function Navbar() {
   const navigate = useNavigate();
   const { totalItems, totalMonto } = useCart();
-  const { usuario, esAdmin, cerrarSesion } = useAuth();
+  const { usuario, esAdmin, esVendedor, cerrarSesion } = useAuth();
   const [textoBusqueda, setTextoBusqueda] = useState('');
+
+  // El acceso al panel solo aparece para ADMIN (va al dashboard) y VENDEDOR (va a productos)
+  const puedeVerPanel = esAdmin || esVendedor;
+
+  // Saludo con el nombre del usuario. El VENDEDOR no tiene página de perfil (pauta: solo
+  // productos y órdenes), así que para él el saludo es texto y no un enlace.
+  const saludo = usuario && (
+    <>
+      <i className="bi bi-person-circle text-info me-1"></i>
+      Hola, <strong>{usuario.nombre}</strong>
+      {usuario.descuentoDuoc && (
+        <span className="badge bg-warning text-dark ms-2">Duoc -20%</span>
+      )}
+    </>
+  );
 
   const handleCerrarSesion = () => {
     cerrarSesion();
@@ -73,19 +89,19 @@ export default function Navbar() {
             <div className="d-flex flex-wrap align-items-center gap-2">
               {usuario ? (
                 <>
-                  <Link
-                    to={esAdmin ? '/admin/perfil' : '/perfil'}
-                    className="text-light small me-1 text-decoration-none"
-                    title="Ver mi perfil"
-                  >
-                    <i className="bi bi-person-circle text-info me-1"></i>
-                    Hola, <strong>{usuario.nombre}</strong>
-                    {usuario.descuentoDuoc && (
-                      <span className="badge bg-warning text-dark ms-2">Duoc -20%</span>
-                    )}
-                  </Link>
+                  {esVendedor ? (
+                    <span className="text-light small me-1">{saludo}</span>
+                  ) : (
+                    <Link
+                      to={esAdmin ? '/admin/perfil' : '/perfil'}
+                      className="text-light small me-1 text-decoration-none"
+                      title="Ver mi perfil"
+                    >
+                      {saludo}
+                    </Link>
+                  )}
                   <button className="btn btn-sm btn-outline-danger" onClick={handleCerrarSesion}>
-                    <i className="bi bi-box-arrow-right me-1"></i>Salir
+                    <i className="bi bi-box-arrow-right me-1"></i>Cerrar sesión
                   </button>
                 </>
               ) : (
@@ -119,10 +135,10 @@ export default function Navbar() {
                 </NavLink>
               </li>
             ))}
-            {esAdmin && (
+            {puedeVerPanel && (
               <li className="nav-item">
-                <NavLink className="nav-link py-1" to="/admin">
-                  <i className="bi bi-shield-lock me-1"></i>Admin
+                <NavLink className="nav-link py-1" to={rutaInicialPorRol(usuario.rol)}>
+                  <i className="bi bi-shield-lock me-1"></i>Panel
                 </NavLink>
               </li>
             )}

@@ -1,9 +1,13 @@
 import React from 'react';
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { AuthProvider } from '../context/AuthContext';
 import { CartProvider, useCart } from '../context/CartContext';
 import { obtenerProductoPorId } from '../data/productos';
+import { simularAuth, simularSesion, PEDRO } from './sesionSimulada';
+
+// La sesión viene del backend (JWT): se simula authService para no llamar al backend real
+vi.mock('../services/authService');
 
 // El carrito necesita la sesión para saber si aplica el descuento Duoc
 const Proveedores = ({ children }) => (
@@ -17,6 +21,7 @@ const renderCarrito = () => renderHook(() => useCart(), { wrapper: Proveedores }
 describe('Pruebas del estado global del carrito (CartContext)', () => {
   beforeEach(() => {
     localStorage.clear();
+    simularAuth();
   });
 
   it('agregarAlCarrito agrega el producto con cantidad 1 y cobra el precio de oferta', () => {
@@ -93,7 +98,7 @@ describe('Pruebas del estado global del carrito (CartContext)', () => {
   });
 
   it('con un usuario Duoc aplica el 20% de descuento sobre el subtotal (RF3)', () => {
-    localStorage.setItem('levelup_sesion', '2'); // pedro@duocuc.cl
+    simularSesion(PEDRO); // pedro@duocuc.cl, con descuento Duoc
     const { result } = renderCarrito();
 
     act(() => {

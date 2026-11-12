@@ -10,6 +10,7 @@ import { listarCategorias } from '../../services/categoriasService';
 import { esOferta } from '../../utils/precios';
 import { formatearDinero } from '../../utils/formato';
 import EstadoCarga from '../../components/EstadoCarga';
+import { useAuth } from '../../context/AuthContext';
 
 // Imagen usada cuando el administrador crea un producto sin URL de imagen
 const IMAGEN_POR_DEFECTO = "https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=500&auto=format&fit=crop";
@@ -31,6 +32,8 @@ const armarProductoRequest = (form) => ({
 export default function AdminProductos() {
   // ?criticos=1 llega desde el dashboard para abrir el listado de productos críticos (RF15)
   const [searchParams] = useSearchParams();
+  // ADMIN: CRUD completo. VENDEDOR: solo lista y detalle (se ocultan crear, editar y eliminar)
+  const { esAdmin } = useAuth();
   const [productos, setProductos] = useState([]);
   const [categorias, setCategorias] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -184,9 +187,12 @@ export default function AdminProductos() {
             Administra los artículos del catálogo, precios, ofertas y alertas de stock crítico.
           </p>
         </div>
-        <button className="btn btn-info fw-semibold" onClick={handleAbrirCrear}>
-          <i className="bi bi-plus-circle me-2"></i>Nuevo Producto
-        </button>
+        {/* Solo el ADMIN crea productos; el VENDEDOR solo ve la lista y el detalle (pauta) */}
+        {esAdmin && (
+          <button className="btn btn-info fw-semibold" onClick={handleAbrirCrear}>
+            <i className="bi bi-plus-circle me-2"></i>Nuevo Producto
+          </button>
+        )}
       </div>
 
       {/* Barra de Búsqueda y Switch de Stock Crítico */}
@@ -308,20 +314,25 @@ export default function AdminProductos() {
                           >
                             <i className="bi bi-eye"></i>
                           </button>
-                          <button
-                            className="btn btn-outline-warning"
-                            title="Editar"
-                            onClick={() => handleAbrirEditar(prod)}
-                          >
-                            <i className="bi bi-pencil"></i>
-                          </button>
-                          <button
-                            className="btn btn-outline-danger"
-                            title="Eliminar"
-                            onClick={() => handleEliminar(prod.id)}
-                          >
-                            <i className="bi bi-trash"></i>
-                          </button>
+                          {/* Editar y eliminar solo para el ADMIN (el backend también los rechaza con 403) */}
+                          {esAdmin && (
+                            <>
+                              <button
+                                className="btn btn-outline-warning"
+                                title="Editar"
+                                onClick={() => handleAbrirEditar(prod)}
+                              >
+                                <i className="bi bi-pencil"></i>
+                              </button>
+                              <button
+                                className="btn btn-outline-danger"
+                                title="Eliminar"
+                                onClick={() => handleEliminar(prod.id)}
+                              >
+                                <i className="bi bi-trash"></i>
+                              </button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>

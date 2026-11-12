@@ -1,16 +1,20 @@
 import React from 'react';
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
-import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { AuthProvider } from '../context/AuthContext';
 import { CartProvider } from '../context/CartContext';
 import ProductCard from '../components/ProductCard';
 import ResumenOrden from '../components/ResumenOrden';
 import DesgloseTotales from '../components/DesgloseTotales';
 import EstadoOrden from '../components/EstadoOrden';
-import RutaProtegidaAdmin from '../components/RutaProtegida';
 import Navbar from '../components/Navbar';
 import { PRODUCTOS_PRUEBA } from './backendSimulado';
+import { simularAuth, simularSesion, ADMIN, VENDEDOR, PEDRO } from './sesionSimulada';
+
+// La sesión viene del backend (JWT): se simula authService para no llamar al backend real.
+// Las pruebas de RutaProtegida y AdminSidebar están en roles.test.jsx
+vi.mock('../services/authService');
 
 // Productos con el formato que entrega el backend (categoría como objeto)
 const obtenerProductoPorId = (id) => PRODUCTOS_PRUEBA.find((p) => p.id === id);
@@ -141,49 +145,55 @@ describe('Pruebas de componentes reutilizables', () => {
     });
   });
 
-  describe('RutaProtegidaAdmin', () => {
-    const rutasProtegidas = (
-      <Routes>
-        <Route path="/login" element={<p>Página de login</p>} />
-        <Route element={<RutaProtegidaAdmin />}>
-          <Route path="/admin" element={<p>Panel de administración</p>} />
-        </Route>
-      </Routes>
-    );
-
-    it('redirige a /login si no hay sesión o si el usuario no es administrador', () => {
-      localStorage.setItem('levelup_sesion', '2'); // Pedro es cliente
-      renderConApp(rutasProtegidas, { ruta: '/admin' });
-
-      expect(screen.getByText('Página de login')).toBeInTheDocument();
-      expect(screen.queryByText('Panel de administración')).not.toBeInTheDocument();
-      expect(screen.getByTestId('ruta')).toHaveTextContent('/login');
-    });
-
-    it('muestra el panel cuando la sesión es de un administrador', () => {
-      localStorage.setItem('levelup_sesion', '1');
-      renderConApp(rutasProtegidas, { ruta: '/admin' });
-
-      expect(screen.getByText('Panel de administración')).toBeInTheDocument();
-    });
-  });
-
   describe('Navbar', () => {
-    it('sin sesión muestra los botones de ingreso y oculta el enlace Admin', () => {
+    beforeEach(() => {
+      simularAuth();
+    });
+
+    it('sin sesión muestra los botones de ingreso y oculta el acceso al panel', () => {
       renderConApp(<Navbar />);
 
       expect(screen.getByRole('link', { name: 'Iniciar sesión' })).toHaveAttribute('href', '/login');
       expect(screen.getByRole('link', { name: 'Crear cuenta' })).toHaveAttribute('href', '/registro');
-      expect(screen.queryByRole('link', { name: /admin/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: /panel/i })).not.toBeInTheDocument();
     });
 
-    it('con sesión de administrador saluda, enlaza a su perfil y muestra el acceso Admin', () => {
-      localStorage.setItem('levelup_sesion', '1');
+    it('con sesión de administrador saluda, enlaza a su perfil y muestra el acceso al panel', () => {
+      simularSesion(ADMIN);
       renderConApp(<Navbar />);
 
       expect(screen.getByTitle('Ver mi perfil')).toHaveAttribute('href', '/admin/perfil');
-      expect(screen.getByRole('link', { name: 'Admin' })).toHaveAttribute('href', '/admin');
+      expect(screen.getByTitle('Ver mi perfil')).toHaveTextContent('Hola, Admin');
+      expect(screen.getByRole('link', { name: 'Panel' })).toHaveAttribute('href', '/admin');
+      expect(screen.getByRole('button', { name: /cerrar sesión/i })).toBeInTheDocument();
       expect(screen.queryByText('Iniciar sesión')).not.toBeInTheDocument();
+    });
+
+    it('al vendedor el panel lo lleva a productos y su nombre no enlaza a un perfil', () => {
+      simularSesion(VENDEDOR);
+      renderConApp(<Navbar />);
+
+      expect(screen.getByRole('link', { name: 'Panel' })).toHaveAttribute('href', '/admin/productos');
+      expect(screen.getByText('Vendedor')).toBeInTheDocument();
+      expect(screen.queryByTitle('Ver mi perfil')).not.toBeInTheDocument();
+    });
+
+    it('al cliente no le muestra el panel y su nombre enlaza a /perfil', () => {
+      simularSesion(PEDRO);
+      renderConApp(<Navbar />);
+
+      expect(screen.getByTitle('Ver mi perfil')).toHaveAttribute('href', '/perfil');
+      expect(screen.getByText('Duoc -20%')).toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'Panel' })).not.toBeInTheDocument();
+    });
+
+    it('cerrar sesión vuelve a mostrar los botones de ingreso', () => {
+      simularSesion(PEDRO);
+      renderConApp(<Navbar />);
+
+      fireEvent.click(screen.getByRole('button', { name: /cerrar sesión/i }));
+      expect(screen.getByRole('link', { name: 'Iniciar sesión' })).toBeInTheDocument();
+      expect(localStorage.getItem('token')).toBeNull();
     });
 
     it('muestra el total y la cantidad de productos del carrito', () => {

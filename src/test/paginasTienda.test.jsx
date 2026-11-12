@@ -2,13 +2,16 @@ import React from 'react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 import App from '../App';
-import { obtenerOrdenes } from '../data/ordenes';
+import { obtenerOrdenes, crearOrden } from '../data/ordenes';
+import { login, actualizarPerfil } from '../services/authService';
 import { simularBackend, simularBackendCaido } from './backendSimulado';
+import { simularAuth, simularSesion, PEDRO } from './sesionSimulada';
 
 // Los services se reemplazan por funciones simuladas: las pruebas no llaman al backend real.
-// simularBackend() (en beforeEach) les da respuestas con los datos de backendSimulado.js
+// simularBackend() y simularAuth() (en beforeEach) les dan respuestas con los datos de prueba
 vi.mock('../services/productosService');
 vi.mock('../services/categoriasService');
+vi.mock('../services/authService');
 
 // Abre la aplicación completa en la ruta indicada, como lo haría el usuario
 const abrirEn = (ruta) => {
@@ -32,7 +35,9 @@ describe('Pruebas de las vistas de la tienda', () => {
 
   beforeEach(() => {
     localStorage.clear();
+    vi.clearAllMocks(); // borra las llamadas registradas en la prueba anterior (ej: login)
     db = simularBackend();
+    simularAuth();
   });
 
   describe('Home y Catálogo', () => {
@@ -174,42 +179,101 @@ describe('Pruebas de las vistas de la tienda', () => {
       expect(campo('nombre')).toHaveClass('is-invalid');
     });
 
-    it('avisa el descuento Duoc y al registrarse entra con la cuenta nueva (RF1)', () => {
-      abrirEn('/registro');
+    // Llena el registro con datos válidos (el correo y el código de referido se pueden cambiar)
+    const llenarRegistro = (correo, codigoReferido = '') => {
       escribir('nombre', 'María');
       escribir('apellidos', 'Soto');
-      escribir('correo', 'maria@duocuc.cl');
-      expect(screen.getByText(/correo duoc detectado/i)).toBeInTheDocument();
-
+      escribir('correo', correo);
       escribir('fechaNacimiento', '2000-01-01');
       escribir('password', 'maria1234');
       escribir('confirmarPassword', 'maria1234');
+      escribir('codigoReferido', codigoReferido);
+    };
+
+    it('avisa el descuento Duoc y al registrarse entra con la cuenta nueva (RF1)', async () => {
+      abrirEn('/registro');
+      llenarRegistro('maria@duocuc.cl');
+      expect(screen.getByText(/correo duoc detectado/i)).toBeInTheDocument();
       fireEvent.click(screen.getByRole('button', { name: 'Crear cuenta' }));
 
+      // POST /auth/registro y luego login automático
+      expect(await screen.findByTitle('Ver mi perfil')).toHaveTextContent('Hola, María');
       expect(rutaActual()).toBe('/');
-      expect(screen.getByTitle('Ver mi perfil')).toHaveTextContent('Hola, María');
       expect(screen.getByText('Duoc -20%')).toBeInTheDocument();
+      expect(login).toHaveBeenCalledWith('maria@duocuc.cl', 'maria1234');
     });
 
-    it('el login muestra un error con datos incorrectos', () => {
+    it('el registro muestra el error del backend si el correo ya está registrado', async () => {
+      abrirEn('/registro');
+      llenarRegistro('pedro@duocuc.cl');
+      fireEvent.click(screen.getByRole('button', { name: 'Crear cuenta' }));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(/ya existe un usuario registrado con el correo pedro@duocuc.cl/i);
+      expect(rutaActual()).toBe('/registro');
+    });
+
+    it('el registro muestra el error del backend si el código de referido no existe', async () => {
+      abrirEn('/registro');
+      llenarRegistro('maria@gmail.com', 'lvlnoexiste');
+      fireEvent.click(screen.getByRole('button', { name: 'Crear cuenta' }));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent("El código de referido 'LVLNOEXISTE' no existe");
+      expect(screen.getByRole('button', { name: 'Crear cuenta' })).toBeEnabled();
+    });
+
+    it('el login muestra un error con datos incorrectos', async () => {
       abrirEn('/login');
       fireEvent.click(screen.getByRole('button', { name: 'Ingresar' }));
       expect(screen.getByText('Ingresa tu correo y contraseña')).toBeInTheDocument();
+      expect(login).not.toHaveBeenCalled();
 
       escribir('correo', 'pedro@duocuc.cl');
       escribir('password', 'incorrecta1');
       fireEvent.click(screen.getByRole('button', { name: 'Ingresar' }));
-      expect(screen.getByText('Correo o contraseña incorrectos')).toBeInTheDocument();
+      // Mensaje que responde el backend (401)
+      expect(await screen.findByText('Correo o contraseña incorrectos')).toBeInTheDocument();
+      expect(localStorage.getItem('token')).toBeNull();
     });
 
-    it('el administrador entra directo a su panel', () => {
+    it('mientras espera al backend el botón muestra "Ingresando..." y queda deshabilitado', () => {
+      vi.mocked(login).mockImplementationOnce(() => new Promise(() => {})); // nunca responde
+      abrirEn('/login');
+      escribir('correo', 'pedro@duocuc.cl');
+      escribir('password', 'pedro1234');
+      fireEvent.click(screen.getByRole('button', { name: 'Ingresar' }));
+
+      expect(screen.getByRole('button', { name: /ingresando/i })).toBeDisabled();
+    });
+
+    it('el ADMIN entra directo al dashboard del panel', async () => {
       abrirEn('/login');
       escribir('correo', 'admin@levelup.cl');
       escribir('password', 'admin1234');
       fireEvent.click(screen.getByRole('button', { name: 'Ingresar' }));
 
+      expect(await screen.findByText('Panel de Administración')).toBeInTheDocument();
       expect(rutaActual()).toBe('/admin');
-      expect(screen.getByText('Panel de Administración')).toBeInTheDocument();
+      expect(localStorage.getItem('token')).toBe('token-1');
+    });
+
+    it('el VENDEDOR entra directo a la lista de productos', async () => {
+      abrirEn('/login');
+      escribir('correo', 'vendedor@levelup.cl');
+      escribir('password', 'vendedor1234');
+      fireEvent.click(screen.getByRole('button', { name: 'Ingresar' }));
+
+      expect(await screen.findByText('Gestión de Productos e Inventario')).toBeInTheDocument();
+      expect(rutaActual()).toBe('/admin/productos');
+    });
+
+    it('el CLIENTE vuelve al inicio de la tienda', async () => {
+      abrirEn('/login');
+      escribir('correo', 'pedro@duocuc.cl');
+      escribir('password', 'pedro1234');
+      fireEvent.click(screen.getByRole('button', { name: 'Ingresar' }));
+
+      expect(await screen.findByTitle('Ver mi perfil')).toHaveTextContent('Hola, Pedro');
+      expect(rutaActual()).toBe('/');
     });
   });
 
@@ -222,7 +286,7 @@ describe('Pruebas de las vistas de la tienda', () => {
     };
 
     it('el carrito de un usuario Duoc muestra subtotal, descuento, impuestos y total', () => {
-      localStorage.setItem('levelup_sesion', '2');
+      simularSesion(PEDRO);
       localStorage.setItem('levelup_cart', JSON.stringify([{ id: 5, nombre: 'Mouse Gamer', precio: 10000, cantidad: 2, imagen: '' }]));
       abrirEn('/carrito');
 
@@ -295,28 +359,46 @@ describe('Pruebas de las vistas de la tienda', () => {
   });
 
   describe('Perfil, Contacto y Blog', () => {
-    it('el perfil del cliente muestra sus puntos, código de referido e historial (RF5)', () => {
-      localStorage.setItem('levelup_sesion', '2');
+    it('el perfil del cliente muestra sus puntos, código de referido e historial (RF5)', async () => {
+      simularSesion(PEDRO);
+      // El historial todavía es local (data/ordenes.js) hasta la tarea F3; Pedro en el backend es el id 3
+      const orden = crearOrden({
+        estado: 'pagada', usuarioId: PEDRO.id, cliente: { nombre: 'Pedro' },
+        items: [{ id: 3, nombre: 'Catan El Juego', precio: 27990, cantidad: 1 }],
+        subtotal: 27990, descuento: 5598, total: 22392,
+      });
       abrirEn('/perfil');
 
-      expect(screen.getByText(/100 pts/)).toBeInTheDocument();
+      // Datos que responde GET /auth/perfil
+      expect(await screen.findByText(/100 pts/)).toBeInTheDocument();
       expect(screen.getByText('LVLPEDRO')).toBeInTheDocument();
-      expect(screen.getByText('#20261001-001')).toBeInTheDocument();
+      expect(screen.getByText('20% Descuento Duoc')).toBeInTheDocument();
+      expect(screen.getByText(`#${orden.numeroOrden}`)).toBeInTheDocument();
     });
 
-    it('el perfil valida el nombre al editarlo y actualiza el saludo de la barra (RF5)', () => {
-      localStorage.setItem('levelup_sesion', '2');
+    it('sin sesión, el perfil redirige a /login', () => {
       abrirEn('/perfil');
-      fireEvent.click(screen.getByRole('button', { name: /editar/i }));
+      expect(rutaActual()).toBe('/login');
+    });
+
+    it('el perfil valida el nombre al editarlo y actualiza el saludo de la barra (RF5)', async () => {
+      simularSesion(PEDRO);
+      abrirEn('/perfil');
+      fireEvent.click(await screen.findByRole('button', { name: /editar/i }));
 
       const [nombre] = document.querySelectorAll('main form input[type="text"]');
       fireEvent.change(nombre, { target: { value: 'P3dro!' } });
       fireEvent.click(screen.getByRole('button', { name: /^guardar$/i }));
       expect(screen.getByText(/^El nombre solo puede tener letras/)).toBeInTheDocument();
+      expect(actualizarPerfil).not.toHaveBeenCalled();
 
       fireEvent.change(nombre, { target: { value: 'Pedro Pablo' } });
       fireEvent.click(screen.getByRole('button', { name: /^guardar$/i }));
-      expect(screen.getByText(/actualizados exitosamente/)).toBeInTheDocument();
+      expect(await screen.findByText(/actualizados exitosamente/)).toBeInTheDocument();
+      // PUT /auth/perfil: sin rol, puntos ni descuento; contraseña vacía = mantener la actual
+      expect(actualizarPerfil).toHaveBeenCalledWith({
+        nombre: 'Pedro Pablo', apellidos: 'Hacker', fechaNacimiento: '2002-08-20', password: '',
+      });
       expect(screen.getByTitle('Ver mi perfil')).toHaveTextContent('Hola, Pedro Pablo');
     });
 

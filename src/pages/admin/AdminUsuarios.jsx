@@ -11,6 +11,14 @@ import { useAuth } from '../../context/AuthContext';
 import { esCorreoValido, esPasswordSegura, validarRegistro, validarNombreCompleto } from '../../utils/validaciones';
 import { formatearDinero, formatearFecha } from '../../utils/formato';
 import EstadoOrden from '../../components/EstadoOrden';
+import { ROLES, NOMBRE_ROL } from '../../utils/roles';
+
+// Color de la etiqueta de cada rol en la tabla
+const COLOR_ROL = {
+  ADMIN: 'bg-danger',
+  VENDEDOR: 'bg-warning text-dark',
+  CLIENTE: 'bg-info text-dark',
+};
 
 export default function AdminUsuarios() {
   const { usuario: adminActual } = useAuth();
@@ -31,7 +39,7 @@ export default function AdminUsuarios() {
     correo: '',
     password: '',
     fechaNacimiento: '',
-    rol: 'cliente'
+    rol: ROLES.CLIENTE
   });
 
   const cargarDatos = () => setUsuarios(obtenerUsuarios());
@@ -46,7 +54,7 @@ export default function AdminUsuarios() {
       correo: '',
       password: '',
       fechaNacimiento: '',
-      rol: 'cliente'
+      rol: ROLES.CLIENTE
     });
     setErrores([]);
     setModoModal('crear');
@@ -62,7 +70,7 @@ export default function AdminUsuarios() {
       // Vacía: solo se cambia la contraseña si el admin escribe una nueva
       password: '',
       fechaNacimiento: user.fechaNacimiento || '',
-      rol: user.rol || 'cliente'
+      rol: user.rol || ROLES.CLIENTE
     });
     setErrores([]);
     setModoModal('editar');
@@ -93,7 +101,7 @@ export default function AdminUsuarios() {
     }
     const existente = esCorreoValido(form.correo) ? obtenerUsuarioPorCorreo(form.correo) : null;
     if (existente && existente.id !== form.id) mensajes.push('Ya existe un usuario con ese correo');
-    if (esUsuarioActual(form) && form.rol !== 'admin') {
+    if (esUsuarioActual(form) && form.rol !== ROLES.ADMIN) {
       mensajes.push('No puedes quitarte el rol de administrador a ti mismo');
     }
     return mensajes;
@@ -204,8 +212,9 @@ export default function AdminUsuarios() {
               onChange={(e) => setFiltroRol(e.target.value)}
             >
               <option value="todos">Todos los roles</option>
-              <option value="admin">Administradores</option>
-              <option value="cliente">Clientes</option>
+              <option value={ROLES.ADMIN}>Administradores</option>
+              <option value={ROLES.VENDEDOR}>Vendedores</option>
+              <option value={ROLES.CLIENTE}>Clientes</option>
             </select>
           </div>
           <div className="col-md-2 text-md-end">
@@ -262,8 +271,8 @@ export default function AdminUsuarios() {
                       </td>
                       <td className="small">{u.correo}</td>
                       <td>
-                        <span className={`badge ${u.rol === 'admin' ? 'bg-danger' : 'bg-info text-dark'}`}>
-                          {u.rol === 'admin' ? 'Administrador' : 'Cliente'}
+                        <span className={`badge ${COLOR_ROL[u.rol] ?? 'bg-secondary'}`}>
+                          {NOMBRE_ROL[u.rol] ?? u.rol}
                         </span>
                       </td>
                       <td>
@@ -334,7 +343,7 @@ export default function AdminUsuarios() {
                     </div>
                     <div className="col-md-6">
                       <strong>Código Referido:</strong> {usuarioSel?.codigoReferido || 'N/A'}<br />
-                      <strong>Rol:</strong> {usuarioSel?.rol === 'admin' ? 'Administrador' : 'Cliente'}<br />
+                      <strong>Rol:</strong> {NOMBRE_ROL[usuarioSel?.rol]}<br />
                       <strong>Puntos LevelUp:</strong> {usuarioSel?.puntos || 0}
                     </div>
                   </div>
@@ -423,8 +432,10 @@ export default function AdminUsuarios() {
                           value={form.rol}
                           onChange={(e) => setForm({ ...form, rol: e.target.value })}
                         >
-                          <option value="cliente">Cliente</option>
-                          <option value="admin">Administrador</option>
+                          {/* Mismos valores que el enum Rol del backend (en mayúsculas) */}
+                          <option value={ROLES.CLIENTE}>Cliente</option>
+                          <option value={ROLES.VENDEDOR}>Vendedor</option>
+                          <option value={ROLES.ADMIN}>Administrador</option>
                         </select>
                       </div>
                       <div className="col-md-6">

@@ -1,31 +1,43 @@
-import React, { useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { actualizarUsuario } from '../data/usuarios';
+import { obtenerPerfil, actualizarPerfil } from '../services/authService';
 import { obtenerOrdenesPorUsuario, ordenarPorFechaDesc } from '../data/ordenes';
 import { formatearDinero, formatearFecha } from '../utils/formato';
 import { validarNombreCompleto } from '../utils/validaciones';
 import EstadoOrden from '../components/EstadoOrden';
+import EstadoCarga from '../components/EstadoCarga';
 
+// Perfil del cliente (RF5). Sin sesión no se llega aquí: RutaProtegida (App.jsx) redirige a /login.
 export default function Perfil() {
-  const { usuario, refrescarUsuario } = useAuth();
+  const { usuario, actualizarUsuarioSesion } = useAuth();
+  const [perfil, setPerfil] = useState(null); // datos de GET /auth/perfil
+  const [cargando, setCargando] = useState(true);
+  const [errorCarga, setErrorCarga] = useState('');
   const [editando, setEditando] = useState(false);
+  const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState(null);
   const [form, setForm] = useState({ nombre: '', apellidos: '' });
 
-  // Sin sesión no hay perfil que mostrar (RF5)
-  if (!usuario) return <Navigate to="/login" replace />;
+  // GET /auth/perfil: puntos, descuento Duoc y código de referido actualizados desde el backend
+  useEffect(() => {
+    obtenerPerfil()
+      .then((datos) => setPerfil(datos))
+      .catch((err) => setErrorCarga(err.message))
+      .finally(() => setCargando(false));
+  }, []);
 
-  const datosUser = usuario;
+  // El historial de compras todavía sale de data/ordenes.js (se conecta al backend en la tarea F3)
   const compras = ordenarPorFechaDesc(obtenerOrdenesPorUsuario(usuario.id));
-  const esDuoc = usuario.descuentoDuoc;
 
   const handleEditar = () => {
-    setForm({ nombre: usuario.nombre, apellidos: usuario.apellidos });
+    setForm({ nombre: perfil.nombre, apellidos: perfil.apellidos });
     setEditando(true);
   };
 
-  const handleGuardar = (e) => {
+  // PUT /auth/perfil. El cliente solo edita nombre y apellidos: la fecha de nacimiento se envía igual
+  // (el backend la exige) y la contraseña vacía significa "mantener la actual".
+  // Rol, puntos y descuento no se envían: el backend no permite cambiarlos.
+  const handleGuardar = async (e) => {
     e.preventDefault();
 
     const errorNombre = validarNombreCompleto(form.nombre, form.apellidos);
@@ -34,27 +46,53 @@ export default function Perfil() {
       return;
     }
 
-    actualizarUsuario(usuario.id, {
-      nombre: form.nombre.trim(),
-      apellidos: form.apellidos.trim()
-    });
-    refrescarUsuario();
-
-    setEditando(false);
-    setMensaje({ tipo: 'success', texto: '¡Datos de perfil actualizados exitosamente!' });
-    setTimeout(() => setMensaje(null), 3000);
+    setGuardando(true);
+    try {
+      const actualizado = await actualizarPerfil({
+        nombre: form.nombre.trim(),
+        apellidos: form.apellidos.trim(),
+        fechaNacimiento: perfil.fechaNacimiento,
+        password: '',
+      });
+      setPerfil(actualizado);
+      actualizarUsuarioSesion(actualizado); // la Navbar muestra el nombre nuevo
+      setEditando(false);
+      setMensaje({ tipo: 'success', texto: '¡Datos de perfil actualizados exitosamente!' });
+      setTimeout(() => setMensaje(null), 3000);
+    } catch (err) {
+      setMensaje({ tipo: 'danger', texto: err.message });
+    } finally {
+      setGuardando(false);
+    }
   };
+
+  const encabezado = (
+    <div className="mb-4">
+      <h2 className="fw-bold text-info mb-1">
+        <i className="bi bi-person-circle me-2"></i>Mi Perfil de Cliente
+      </h2>
+      <p className="text-secondary">
+        Gestiona tu información personal, revisa tus Puntos LevelUp y tu historial de compras.
+      </p>
+    </div>
+  );
+
+  // Mientras llega el perfil (o si el backend no responde) solo se muestra el estado de la carga
+  if (cargando || errorCarga) {
+    return (
+      <div className="container py-4 text-light" style={{ maxWidth: '950px' }}>
+        {encabezado}
+        <EstadoCarga cargando={cargando} error={errorCarga} />
+      </div>
+    );
+  }
+
+  const datosUser = perfil;
+  const esDuoc = perfil.descuentoDuoc;
 
   return (
     <div className="container py-4 text-light" style={{ maxWidth: '950px' }}>
-      <div className="mb-4">
-        <h2 className="fw-bold text-info mb-1">
-          <i className="bi bi-person-circle me-2"></i>Mi Perfil de Cliente
-        </h2>
-        <p className="text-secondary">
-          Gestiona tu información personal, revisa tus Puntos LevelUp y tu historial de compras.
-        </p>
-      </div>
+      {encabezado}
 
       {mensaje && (
         <div className={`alert alert-${mensaje.tipo} alert-dismissible fade show`} role="alert">
@@ -162,7 +200,7 @@ export default function Perfil() {
                   <input
                     type="email"
                     className="form-control bg-dark text-secondary border-secondary"
-                    value={usuario.correo}
+                    value={perfil.correo}
                     disabled
                   />
                 </div>
@@ -174,8 +212,8 @@ export default function Perfil() {
                   >
                     Cancelar
                   </button>
-                  <button type="submit" className="btn btn-sm btn-info fw-bold">
-                    Guardar
+                  <button type="submit" className="btn btn-sm btn-info fw-bold" disabled={guardando}>
+                    {guardando ? 'Guardando...' : 'Guardar'}
                   </button>
                 </div>
               </form>
@@ -188,6 +226,11 @@ export default function Perfil() {
                 <li className="list-group-item bg-dark text-light border-secondary px-0">
                   <span className="text-secondary small d-block">Correo Electrónico:</span>
                   <span>{datosUser.correo}</span>
+                </li>
+                <li className="list-group-item bg-dark text-light border-secondary px-0">
+                  <span className="text-secondary small d-block">Fecha de Nacimiento:</span>
+                  {/* Se agrega la hora para que "2002-08-20" se lea en hora de Chile y no en UTC (mostraría el día anterior) */}
+                  <span>{formatearFecha(`${datosUser.fechaNacimiento}T00:00:00`)}</span>
                 </li>
                 <li className="list-group-item bg-dark text-light border-secondary px-0">
                   <span className="text-secondary small d-block">Código de Referido:</span>

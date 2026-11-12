@@ -1,5 +1,8 @@
 import { esCorreoDuoc } from '../utils/validaciones';
 
+// Ya NO se usa para la sesión (login, registro y perfil van al backend con JWT desde la tarea F2).
+// Solo lo usa AdminUsuarios hasta que se conecte a /api/v1/usuarios.
+// Los roles van en mayúsculas, igual que el enum Rol del backend.
 // Contraseñas en texto plano solo porque es una simulación sin backend
 const USUARIOS_INICIALES = [
   {
@@ -9,7 +12,7 @@ const USUARIOS_INICIALES = [
     correo: "admin@levelup.cl",
     password: "admin1234",
     fechaNacimiento: "1995-05-10",
-    rol: "admin",
+    rol: "ADMIN",
     descuentoDuoc: false,
     puntos: 0,
     codigoReferido: "LVLADMIN",
@@ -21,7 +24,7 @@ const USUARIOS_INICIALES = [
     correo: "pedro@duocuc.cl",
     password: "pedro1234",
     fechaNacimiento: "2002-08-20",
-    rol: "cliente",
+    rol: "CLIENTE",
     descuentoDuoc: true,
     puntos: 100,
     codigoReferido: "LVLPEDRO",
@@ -70,7 +73,7 @@ export const obtenerUsuarioPorCodigoReferido = (codigo) => {
 export const crearUsuario = (nuevoUsuario) => {
   const usuarios = obtenerUsuarios();
   const usuarioConId = {
-    rol: "cliente",
+    rol: "CLIENTE",
     puntos: 0,
     ...nuevoUsuario,
     id: Date.now(),

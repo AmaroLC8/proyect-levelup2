@@ -247,22 +247,137 @@ ejecutando desde la ruta con mayúscula: `cd C:\Users\...\proyect-levelup2` y lu
 
 ---
 
-## 8. Pendiente (próximas tareas)
+### Sesión simulada: `src/test/sesionSimulada.js`
+Igual que `backendSimulado.js`, pero para `authService` (`vi.mock('../services/authService')`):
+- `ADMIN`, `VENDEDOR` y `PEDRO`: los 3 usuarios del `DataInitializer` del backend (ids 1, 2 y 3, rol en mayúsculas).
+- `simularAuth()`: `login` revisa correo y contraseña (401 si no coinciden), `registro` rechaza correos repetidos (409)
+  y códigos de referido inexistentes (400), y `obtenerSesion` / `obtenerPerfil` responden según el token guardado.
+- `simularSesion(PEDRO)`: deja guardados `token` y `usuario` en localStorage, como después de un login.
+  Se usa **antes** de renderizar para abrir una página "con sesión iniciada".
 
-- **Login con JWT**: hoy el login es local y **no guarda token**. Por eso crear, editar o eliminar productos
-  y categorías contra el backend real responde **401** ("Debes iniciar sesión para acceder a este recurso").
-  La página lo muestra como error, sin caerse. Para probar el CRUD antes de esa tarea: hacer login en Swagger
-  (`POST /api/v1/auth/login` con `admin@levelup.cl` / `admin1234`), copiar el token y, en la consola del
-  navegador, ejecutar `localStorage.setItem('token', 'eyJ...')`.
-- **Carrito, checkout, dashboard, reportes y órdenes** siguen usando `src/data` (el checkout todavía descuenta
-  stock en `data/productos.js`).
+---
+
+## 8. Sesión con JWT (tarea F2)
+
+### Archivos
+| Archivo | Qué hace |
+|---|---|
+| `services/authService.js` | `login`, `registro`, `obtenerSesion` (`GET /auth/me`), `obtenerPerfil` y `actualizarPerfil` (`GET`/`PUT /auth/perfil`) |
+| `context/AuthContext.jsx` | Guarda la sesión y entrega `usuario`, `esAdmin`, `esVendedor`, `esCliente`, `iniciarSesion`, `registrarse`, `cerrarSesion` y `actualizarUsuarioSesion` |
+| `utils/roles.js` | `ROLES` (`'ADMIN'`, `'VENDEDOR'`, `'CLIENTE'`), `NOMBRE_ROL` y `rutaInicialPorRol` |
+| `components/RutaProtegida.jsx` | Deja pasar solo a los `rolesPermitidos` |
+
+`src/data/usuarios.js` ya **no** se usa para la sesión (solo lo usa AdminUsuarios mientras no se conecte a `/usuarios`).
+
+### Flujo del login
+```
+Login.jsx ──► iniciarSesion(correo, password)          (AuthContext)
+                └► login(correo, password)             (authService)
+                     └► POST /api/v1/auth/login        (api.js → backend)
+                ◄── { token: "eyJ...", tipo: "Bearer", usuario: { id, nombre, rol: "ADMIN", ... } }
+              localStorage: token = "eyJ...", usuario = {...}
+Login.jsx ──► navigate(rutaInicialPorRol(usuario.rol))  ADMIN → /admin · VENDEDOR → /admin/productos · CLIENTE → /
+```
+Desde ese momento `api.js` envía `Authorization: Bearer eyJ...` en **todas** las peticiones (ver sección 3), y el
+backend sabe quién es y qué rol tiene. Por eso el CRUD de productos y categorías ya funciona con la sesión del ADMIN.
+
+Errores: si el backend responde 401 ("Correo o contraseña incorrectos"), `iniciarSesion` lanza el Error y `Login.jsx`
+lo muestra en una alerta. Mientras espera, el botón dice "Ingresando..." y queda deshabilitado.
+
+### Registro
+`registrarse(datos)` hace **dos** llamadas: `POST /auth/registro` (crea la cuenta, no entrega token) y luego
+`iniciarSesion` con el mismo correo y contraseña. `Registro.jsx` primero valida en el navegador (`validarRegistro`)
+y después muestra los errores del backend: correo repetido (409), menor de edad o código de referido inexistente (400).
+`confirmarPassword` no se envía, y el código de referido vacío se envía como `null`.
+
+### Al abrir o recargar la app
+1. `useState(leerUsuarioGuardado)`: si hay `token` y `usuario` guardados, la sesión se muestra de inmediato.
+2. `useEffect` → `GET /auth/me` para confirmar que el token sigue sirviendo:
+   - 200 → se actualizan los datos guardados (ej: el admin le cambió el rol o los puntos).
+   - **401** (token vencido, dura 8 horas, o inválido) → `cerrarSesion`.
+   - Backend apagado → se mantiene la sesión; cada página muestra su propio error de conexión.
+
+**¿Y si alguien edita el rol en localStorage?** Solo cambia los menús que ve en su navegador. Cada petición al backend
+lleva el token, que está **firmado**: el backend saca el rol de su base de datos y responde 403. Además, al recargar,
+`/auth/me` reemplaza el usuario guardado por el real.
+
+### Cerrar sesión
+`cerrarSesion()` borra `token` y `usuario` de localStorage. No hay endpoint de logout: el backend es *stateless*
+(no guarda sesiones), así que basta con que el navegador olvide el token.
+
+### Perfil (`Perfil.jsx` y `AdminPerfil.jsx`)
+- Leen los datos con `GET /auth/perfil` (con carga y error, igual que las otras páginas).
+- Guardan con `PUT /auth/perfil` enviando `{ nombre, apellidos, fechaNacimiento, password }` (formato `PerfilRequest`).
+  La contraseña vacía significa "mantener la actual". **No** se envían correo, rol, puntos ni descuento: el backend
+  no los acepta (nadie puede darse más permisos o puntos a sí mismo).
+- Después de guardar llaman a `actualizarUsuarioSesion(respuesta)`, para que la Navbar muestre el nombre nuevo.
+- En `AdminPerfil` el correo ahora es **solo lectura** (va dentro del token; lo cambia otro ADMIN en Usuarios).
+- El historial de compras del cliente sigue saliendo de `data/ordenes.js` hasta la tarea F3.
+
+---
+
+## 9. Qué ve cada rol (pauta del profesor)
+
+| Vista / acción | Visitante | CLIENTE | VENDEDOR | ADMIN |
+|---|:-:|:-:|:-:|:-:|
+| Tienda (home, catálogo, detalle, carrito, checkout…) | ✅ | ✅ | ✅ | ✅ |
+| `/perfil` (perfil de cliente) | → `/login` | ✅ | → `/` | ✅ |
+| Enlace "Panel" en la Navbar | ❌ | ❌ | ✅ → `/admin/productos` | ✅ → `/admin` |
+| Su nombre en la Navbar enlaza a un perfil | – | `/perfil` | ❌ (solo texto) | `/admin/perfil` |
+| `/admin/productos` (lista y detalle) | → `/login` | → `/` | ✅ | ✅ |
+| Crear, editar y eliminar productos | – | – | ❌ (botones ocultos) | ✅ |
+| `/admin/ordenes` y `/admin/ordenes/:id` | → `/login` | → `/` | ✅ | ✅ |
+| Dashboard `/admin`, categorías, usuarios, reportes y perfil admin | → `/login` | → `/` | → `/` | ✅ |
+| Opciones del menú lateral | – | – | Productos, Órdenes | Todas |
+| Página después del login | – | `/` | `/admin/productos` | `/admin` |
+
+Dónde está cada regla:
+- **Rutas**: `App.jsx`, con `<RutaProtegida rolesPermitidos={[...]}>` alrededor de las rutas. Hay una
+  `RutaProtegida` dentro de otra: la de afuera deja entrar al panel a ADMIN y VENDEDOR, y la de adentro
+  deja solo al ADMIN en dashboard, categorías, usuarios, reportes y perfil.
+- **Menú lateral**: `AdminSidebar.jsx`, con el campo `roles` de cada opción en `OPCIONES_ADMIN`.
+- **Botones**: `AdminProductos.jsx`, con `{esAdmin && (...)}`.
+- **Navbar**: `puedeVerPanel = esAdmin || esVendedor`.
+- **Seguridad real**: `SecurityConfig` del backend. Aunque alguien muestre un botón oculto, el backend responde 403.
+
+---
+
+## 10. Pendiente (próximas tareas)
+
+- **Carrito, checkout, dashboard, reportes, órdenes y usuarios** siguen usando `src/data` (el checkout todavía
+  descuenta stock en `data/productos.js`). El historial de Pedro sale vacío en la app real porque las órdenes de
+  ejemplo locales son del `usuarioId` 2 y en el backend Pedro es el id 3 (se arregla en F3).
+- **AdminUsuarios** ya usa los roles en mayúsculas y tiene la opción VENDEDOR, pero sigue siendo CRUD local.
 - **F4**: eliminar `src/data/productos.js` y `src/data/categorias.js` (y sus pruebas). Antes hay que cambiar
   el import de `obtenerPrecioFinal` en `CartContext.jsx` a `../utils/precios`, y las pruebas de
   `CartContext.test.jsx`, que todavía usan `obtenerProductoPorId` local, a `PRODUCTOS_PRUEBA`.
 
 ---
 
-## 9. Ejemplos de modificaciones que podría pedir el profesor
+## 11. Ejemplos de modificaciones que podría pedir el profesor
+
+### Cambiar qué ve un rol (ej: que el VENDEDOR también vea Categorías)
+1. `App.jsx`: sacar `<Route path="categorias" ...>` de la `RutaProtegida` solo ADMIN y ponerla junto a `productos`.
+2. `AdminSidebar.jsx`: en la opción Categorías, `roles: [ADMIN, VENDEDOR]`.
+3. `AdminCategorias.jsx`: ocultar crear, editar y eliminar con `{esAdmin && (...)}`, igual que en AdminProductos.
+4. Backend: `GET /categorias` ya es público. Si el vendedor también debiera **editar**, hay que cambiar `SecurityConfig`.
+5. Pruebas: actualizar `el VENDEDOR solo ve Productos y Órdenes` en `roles.test.jsx`.
+
+### Cambiar a dónde entra cada rol después del login (ej: el VENDEDOR a Órdenes)
+Solo `rutaInicialPorRol` en `src/utils/roles.js` (lo usan Login y el enlace "Panel" de la Navbar).
+
+### Mostrar el rol del usuario en la Navbar
+En `Navbar.jsx`, dentro de `saludo`: `<span className="badge bg-secondary ms-2">{NOMBRE_ROL[usuario.rol]}</span>`
+(importar `NOMBRE_ROL` desde `../utils/roles`).
+
+### Permitir que el cliente cambie su fecha de nacimiento o su contraseña en el perfil
+El backend ya lo acepta (`PerfilRequest`). En `Perfil.jsx`: agregar el campo al estado `form` y un `<input>`, y enviar
+`fechaNacimiento: form.fechaNacimiento` (o `password: form.password`) en `actualizarPerfil`, en vez del valor fijo.
+
+### Cerrar la sesión automáticamente cuando el token vence mientras se usa la app
+Hoy se detecta al recargar (con `/auth/me`). Para detectarlo en cualquier petición: en `api.js`, si
+`respuesta.status === 401` y había token, borrar `token` y `usuario` de localStorage y redirigir con
+`window.location.href = '/login'`.
 
 ### Mostrar un campo nuevo del producto (ej: `marca`)
 1. Backend: agregar `marca` a `Producto`, `ProductoRequest` y `ProductoService.copiarDatos` (ver la guía del backend).

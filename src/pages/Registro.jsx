@@ -5,7 +5,7 @@ import { esCorreoDuoc, validarRegistro } from '../utils/validaciones';
 
 export default function Registro() {
   const navigate = useNavigate();
-  const { registrar } = useAuth();
+  const { registrarse } = useAuth();
 
   const [formData, setFormData] = useState({
     nombre: '',
@@ -18,28 +18,42 @@ export default function Registro() {
   });
   const [errores, setErrores] = useState({});
   const [errorGeneral, setErrorGeneral] = useState('');
+  const [cargando, setCargando] = useState(false);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = (e) => {
+  // POST /auth/registro y luego login automático (AuthContext.registrarse)
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
+    // Primero se valida en el navegador (utils/validaciones.js), para no enviar datos que el backend rechazaría
     const nuevosErrores = validarRegistro(formData);
     setErrores(nuevosErrores);
     if (Object.keys(nuevosErrores).length > 0) return;
 
-    // confirmarPassword solo sirve para validar, no se guarda en el usuario
-    const datos = { ...formData };
-    delete datos.confirmarPassword;
-    const resultado = registrar(datos);
-    if (!resultado.ok) {
-      setErrorGeneral(resultado.error);
-      return;
-    }
+    // Formato RegistroRequest del backend. confirmarPassword solo sirve para validar y no se envía;
+    // el código de referido vacío se envía como null (el backend lo trata como "sin referido")
+    const datos = {
+      nombre: formData.nombre.trim(),
+      apellidos: formData.apellidos.trim(),
+      correo: formData.correo.trim(),
+      fechaNacimiento: formData.fechaNacimiento,
+      password: formData.password,
+      codigoReferido: formData.codigoReferido.trim() || null,
+    };
 
-    navigate('/');
+    setErrorGeneral('');
+    setCargando(true);
+    try {
+      await registrarse(datos);
+      navigate('/');
+    } catch (err) {
+      // Errores del backend: correo ya registrado (409), menor de edad o código de referido inexistente (400)
+      setErrorGeneral(err.message);
+      setCargando(false);
+    }
   };
 
   // Clase y mensaje de error de Bootstrap para cada input
@@ -58,7 +72,7 @@ export default function Registro() {
         </div>
 
         <div className="card-body p-4">
-          {errorGeneral && <div className="alert alert-danger py-2">{errorGeneral}</div>}
+          {errorGeneral && <div className="alert alert-danger py-2" role="alert">{errorGeneral}</div>}
 
           {esCorreoDuoc(formData.correo) && (
             <div className="alert alert-success py-2">
@@ -116,8 +130,13 @@ export default function Registro() {
             </div>
 
             <div className="d-grid mt-4">
-              <button type="submit" className="btn btn-info btn-lg fw-bold text-dark">
-                Crear cuenta
+              {/* Deshabilitado mientras se espera la respuesta del backend */}
+              <button type="submit" className="btn btn-info btn-lg fw-bold text-dark" disabled={cargando}>
+                {cargando ? (
+                  <><span className="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Creando cuenta...</>
+                ) : (
+                  'Crear cuenta'
+                )}
               </button>
             </div>
           </form>

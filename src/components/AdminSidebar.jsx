@@ -1,20 +1,28 @@
 import React from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { ROLES } from '../utils/roles';
 
+const { ADMIN, VENDEDOR } = ROLES;
+
+// Cada opción indica qué roles la ven. Deben coincidir con las rutas protegidas de App.jsx:
+// el VENDEDOR solo ve Productos y Órdenes (pauta del profesor).
 const OPCIONES_ADMIN = [
-  { to: '/admin', texto: 'Dashboard', icono: 'bi-speedometer2', exact: true },
-  { to: '/admin/ordenes', texto: 'Órdenes y Boletas', icono: 'bi-receipt' },
-  { to: '/admin/productos', texto: 'Productos', icono: 'bi-box-seam' },
-  { to: '/admin/categorias', texto: 'Categorías', icono: 'bi-tags' },
-  { to: '/admin/usuarios', texto: 'Usuarios', icono: 'bi-people' },
-  { to: '/admin/reportes', texto: 'Reportes', icono: 'bi-bar-chart' },
-  { to: '/admin/perfil', texto: 'Mi Perfil', icono: 'bi-person-badge' },
+  { to: '/admin', texto: 'Dashboard', icono: 'bi-speedometer2', exact: true, roles: [ADMIN] },
+  { to: '/admin/ordenes', texto: 'Órdenes y Boletas', icono: 'bi-receipt', roles: [ADMIN, VENDEDOR] },
+  { to: '/admin/productos', texto: 'Productos', icono: 'bi-box-seam', roles: [ADMIN, VENDEDOR] },
+  { to: '/admin/categorias', texto: 'Categorías', icono: 'bi-tags', roles: [ADMIN] },
+  { to: '/admin/usuarios', texto: 'Usuarios', icono: 'bi-people', roles: [ADMIN] },
+  { to: '/admin/reportes', texto: 'Reportes', icono: 'bi-bar-chart', roles: [ADMIN] },
+  { to: '/admin/perfil', texto: 'Mi Perfil', icono: 'bi-person-badge', roles: [ADMIN] },
 ];
 
 export default function AdminSidebar() {
   const navigate = useNavigate();
-  const { cerrarSesion } = useAuth();
+  const { usuario, esVendedor, cerrarSesion } = useAuth();
+
+  // Solo las opciones que corresponden al rol del usuario con sesión
+  const opcionesVisibles = OPCIONES_ADMIN.filter((opcion) => opcion.roles.includes(usuario?.rol));
 
   const handleCerrarSesion = () => {
     cerrarSesion();
@@ -33,12 +41,12 @@ export default function AdminSidebar() {
     >
       <div className="pb-3 mb-3 border-bottom border-secondary text-center">
         <span className="fs-5 fw-bold text-info">
-          <i className="bi bi-shield-lock me-2"></i>Panel Admin
+          <i className="bi bi-shield-lock me-2"></i>{esVendedor ? 'Panel Vendedor' : 'Panel Admin'}
         </span>
       </div>
 
       <ul className="nav nav-pills flex-column mb-auto gap-1">
-        {OPCIONES_ADMIN.map((item) => (
+        {opcionesVisibles.map((item) => (
           <li className="nav-item" key={item.to}>
             <NavLink
               to={item.to}

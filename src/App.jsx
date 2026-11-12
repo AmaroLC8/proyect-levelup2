@@ -7,8 +7,9 @@ import { CartProvider } from "./context/CartContext";
 
 // Componentes generales y de seguridad
 import Navbar from "./components/Navbar";
-import RutaProtegidaAdmin from "./components/RutaProtegida";
+import RutaProtegida from "./components/RutaProtegida";
 import AdminLayout from "./components/AdminLayout";
+import { ROLES } from "./utils/roles";
 
 // Páginas Públicas y de Cliente
 import Home from "./pages/Home";
@@ -65,20 +66,28 @@ export default function App() {
                 <Route path="/pago-exitoso" element={<PagoExitoso />} />
                 <Route path="/pago-error" element={<PagoError />} />
 
-                {/* 2. Perfil del Cliente (FUERA de /admin) */}
-                <Route path="/perfil" element={<Perfil />} />
+                {/* 2. Perfil del Cliente (FUERA de /admin). El VENDEDOR no lo ve: según la pauta
+                       solo accede a productos y órdenes */}
+                <Route element={<RutaProtegida rolesPermitidos={[ROLES.CLIENTE, ROLES.ADMIN]} />}>
+                  <Route path="/perfil" element={<Perfil />} />
+                </Route>
 
-                {/* 3. Rutas Protegidas del Panel Administrador */}
-                <Route element={<RutaProtegidaAdmin />}>
+                {/* 3. Rutas Protegidas del Panel (ADMIN y VENDEDOR entran al panel) */}
+                <Route element={<RutaProtegida rolesPermitidos={[ROLES.ADMIN, ROLES.VENDEDOR]} />}>
                   <Route path="/admin" element={<AdminLayout />}>
-                    <Route index element={<AdminDashboard />} />
+                    {/* ADMIN y VENDEDOR: lista y detalle de productos y de órdenes */}
                     <Route path="ordenes" element={<AdminOrdenes />} />
                     <Route path="ordenes/:id" element={<VerBoletaAdmin />} />
                     <Route path="productos" element={<AdminProductos />} />
-                    <Route path="categorias" element={<AdminCategorias />} />
-                    <Route path="usuarios" element={<AdminUsuarios />} />
-                    <Route path="reportes" element={<AdminReportes />} />
-                    <Route path="perfil" element={<AdminPerfil />} />
+
+                    {/* Solo ADMIN: el VENDEDOR que entre aquí vuelve al inicio */}
+                    <Route element={<RutaProtegida rolesPermitidos={[ROLES.ADMIN]} />}>
+                      <Route index element={<AdminDashboard />} />
+                      <Route path="categorias" element={<AdminCategorias />} />
+                      <Route path="usuarios" element={<AdminUsuarios />} />
+                      <Route path="reportes" element={<AdminReportes />} />
+                      <Route path="perfil" element={<AdminPerfil />} />
+                    </Route>
                   </Route>
                 </Route>
               </Routes>

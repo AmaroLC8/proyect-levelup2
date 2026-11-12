@@ -1,20 +1,35 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { actualizarUsuario, obtenerUsuarioPorCorreo } from '../../data/usuarios';
-import { esCorreoValido, esPasswordSegura, validarNombreCompleto } from '../../utils/validaciones';
+import { obtenerPerfil, actualizarPerfil } from '../../services/authService';
+import { esPasswordSegura, validarNombreCompleto } from '../../utils/validaciones';
+import EstadoCarga from '../../components/EstadoCarga';
 
 export default function AdminPerfil() {
-  // RutaProtegidaAdmin asegura que aquí siempre hay un administrador con sesión
-  const { usuario, refrescarUsuario } = useAuth();
+  // RutaProtegida (solo ADMIN) asegura que aquí siempre hay un administrador con sesión
+  const { actualizarUsuarioSesion } = useAuth();
 
+  const [perfil, setPerfil] = useState(null); // datos de GET /auth/perfil
+  const [cargando, setCargando] = useState(true);
+  const [errorCarga, setErrorCarga] = useState('');
+  const [guardando, setGuardando] = useState(false);
   const [adminData, setAdminData] = useState({
-    nombre: usuario.nombre,
-    apellidos: usuario.apellidos,
-    correo: usuario.correo,
+    nombre: '',
+    apellidos: '',
     password: '',
     confirmarPassword: '',
   });
   const [mensaje, setMensaje] = useState(null);
+
+  // GET /auth/perfil al abrir la página; con la respuesta se llena el formulario
+  useEffect(() => {
+    obtenerPerfil()
+      .then((datos) => {
+        setPerfil(datos);
+        setAdminData({ nombre: datos.nombre, apellidos: datos.apellidos, password: '', confirmarPassword: '' });
+      })
+      .catch((err) => setErrorCarga(err.message))
+      .finally(() => setCargando(false));
+  }, []);
 
   const handleChange = (e) => {
     setAdminData({ ...adminData, [e.target.name]: e.target.value });
@@ -24,9 +39,6 @@ export default function AdminPerfil() {
   const validar = () => {
     const errorNombre = validarNombreCompleto(adminData.nombre, adminData.apellidos);
     if (errorNombre) return errorNombre;
-    if (!esCorreoValido(adminData.correo)) return 'Ingresa un correo electrónico válido';
-    const otro = obtenerUsuarioPorCorreo(adminData.correo);
-    if (otro && otro.id !== usuario.id) return 'Ese correo ya pertenece a otra cuenta';
     if (adminData.password) {
       if (!esPasswordSegura(adminData.password)) return 'La contraseña debe tener mínimo 8 caracteres, con letras y números';
       if (adminData.password !== adminData.confirmarPassword) return 'Las contraseñas no coinciden';
@@ -34,7 +46,9 @@ export default function AdminPerfil() {
     return null;
   };
 
-  const handleGuardar = (e) => {
+  // PUT /auth/perfil con el formato PerfilRequest: { nombre, apellidos, fechaNacimiento, password }.
+  // El correo y el rol NO se pueden cambiar aquí (el backend no los recibe).
+  const handleGuardar = async (e) => {
     e.preventDefault();
 
     const error = validar();
@@ -43,18 +57,25 @@ export default function AdminPerfil() {
       return;
     }
 
-    actualizarUsuario(usuario.id, {
-      nombre: adminData.nombre.trim(),
-      apellidos: adminData.apellidos.trim(),
-      correo: adminData.correo.trim().toLowerCase(),
-      // Si no escribe una nueva contraseña se mantiene la actual
-      ...(adminData.password && { password: adminData.password }),
-    });
-    refrescarUsuario();
-
-    setAdminData({ ...adminData, password: '', confirmarPassword: '' });
-    setMensaje({ tipo: 'success', texto: '¡Perfil de administrador actualizado correctamente!' });
-    setTimeout(() => setMensaje(null), 3000);
+    setGuardando(true);
+    try {
+      const actualizado = await actualizarPerfil({
+        nombre: adminData.nombre.trim(),
+        apellidos: adminData.apellidos.trim(),
+        fechaNacimiento: perfil.fechaNacimiento,
+        // Si no escribe una nueva contraseña se envía vacía y el backend mantiene la actual
+        password: adminData.password,
+      });
+      setPerfil(actualizado);
+      actualizarUsuarioSesion(actualizado); // la Navbar muestra el nombre nuevo
+      setAdminData({ ...adminData, password: '', confirmarPassword: '' });
+      setMensaje({ tipo: 'success', texto: '¡Perfil de administrador actualizado correctamente!' });
+      setTimeout(() => setMensaje(null), 3000);
+    } catch (err) {
+      setMensaje({ tipo: 'danger', texto: err.message });
+    } finally {
+      setGuardando(false);
+    }
   };
 
   return (
@@ -68,6 +89,8 @@ export default function AdminPerfil() {
         </p>
       </div>
 
+      <EstadoCarga cargando={cargando} error={errorCarga} />
+
       {mensaje && (
         <div className={`alert alert-${mensaje.tipo} py-2`} role="alert">
           <i className={`bi ${mensaje.tipo === 'success' ? 'bi-check-circle-fill' : 'bi-exclamation-triangle-fill'} me-2`}></i>
@@ -75,6 +98,7 @@ export default function AdminPerfil() {
         </div>
       )}
 
+      {perfil && (
       <div className="row g-4">
         {/* Resumen lateral */}
         <div className="col-md-4">
@@ -84,15 +108,15 @@ export default function AdminPerfil() {
                 className="bg-info text-dark rounded-circle d-inline-flex align-items-center justify-content-center fw-bold fs-1 shadow"
                 style={{ width: '90px', height: '90px' }}
               >
-                {(usuario.nombre?.[0] || 'A').toUpperCase()}
+                {(perfil.nombre?.[0] || 'A').toUpperCase()}
               </div>
             </div>
             <h5 className="fw-bold text-light mb-1">
-              {usuario.nombre} {usuario.apellidos}
+              {perfil.nombre} {perfil.apellidos}
             </h5>
             <span className="badge bg-danger mb-3 align-self-center">Administrador</span>
             <p className="text-secondary small mb-0">
-              <i className="bi bi-envelope me-1"></i>{usuario.correo}
+              <i className="bi bi-envelope me-1"></i>{perfil.correo}
             </p>
           </div>
         </div>
@@ -118,10 +142,11 @@ export default function AdminPerfil() {
                     value={adminData.apellidos} onChange={handleChange} />
                 </div>
                 <div className="col-12">
-                  <label htmlFor="adminCorreo" className="form-label text-secondary small fw-bold">Correo Electrónico</label>
+                  <label htmlFor="adminCorreo" className="form-label text-secondary small fw-bold">Correo Electrónico (no editable)</label>
+                  {/* El correo identifica la sesión (va dentro del token): el backend no permite cambiarlo desde el perfil */}
                   <input id="adminCorreo" type="email" name="correo"
-                    className="form-control bg-dark text-light border-secondary"
-                    value={adminData.correo} onChange={handleChange} />
+                    className="form-control bg-dark text-secondary border-secondary"
+                    value={perfil.correo} disabled />
                 </div>
 
                 <div className="col-12 pt-2 border-top border-secondary">
@@ -141,14 +166,15 @@ export default function AdminPerfil() {
                 </div>
               </div>
               <div className="mt-4 text-end">
-                <button type="submit" className="btn btn-info fw-bold">
-                  <i className="bi bi-save me-2"></i>Guardar Cambios
+                <button type="submit" className="btn btn-info fw-bold" disabled={guardando}>
+                  <i className="bi bi-save me-2"></i>{guardando ? 'Guardando...' : 'Guardar Cambios'}
                 </button>
               </div>
             </form>
           </div>
         </div>
       </div>
+      )}
     </div>
   );
 }

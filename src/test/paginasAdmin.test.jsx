@@ -2,19 +2,24 @@ import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 import App from '../App';
-import { obtenerUsuarios, obtenerUsuarioPorId } from '../data/usuarios';
+import { obtenerUsuarios } from '../data/usuarios';
 import { crearOrden } from '../data/ordenes';
 import { crearProducto, actualizarProducto, eliminarProducto } from '../services/productosService';
+import { actualizarPerfil } from '../services/authService';
 import { simularBackend, simularBackendCaido, errorDelBackend } from './backendSimulado';
+import { simularAuth, simularSesion, ADMIN } from './sesionSimulada';
+
+// La sesión (login con JWT, /auth/me y /auth/perfil) también se simula
+vi.mock('../services/authService');
 
 // Productos y categorías vienen del backend: se simulan los services (no se llama al backend real).
 // simularBackend() (en beforeEach) les da respuestas con los datos de backendSimulado.js
 vi.mock('../services/productosService');
 vi.mock('../services/categoriasService');
 
-// Abre la aplicación en una ruta del panel con la sesión del administrador (id 1)
+// Abre la aplicación en una ruta del panel con la sesión del administrador (token + usuario guardados)
 const abrirAdminEn = (ruta) => {
-  localStorage.setItem('levelup_sesion', '1');
+  simularSesion(ADMIN);
   window.history.pushState({}, '', ruta);
   return render(<App />);
 };
@@ -31,11 +36,13 @@ const esperarCarga = () =>
 
 describe('Pruebas del panel de administración', () => {
   let db; // "base de datos" del backend simulado
+  let authDb; // usuarios del backend simulado (login y perfil)
 
   beforeEach(() => {
     localStorage.clear();
     vi.clearAllMocks(); // borra las llamadas registradas en la prueba anterior (ej: crearProducto)
     db = simularBackend();
+    authDb = simularAuth();
     // Simula que el administrador acepta los mensajes de confirmación al eliminar
     vi.spyOn(window, 'confirm').mockReturnValue(true);
   });
@@ -61,9 +68,14 @@ describe('Pruebas del panel de administración', () => {
       abrirAdminEn('/admin');
       expect(screen.getByRole('link', { name: /ver tienda/i })).toHaveAttribute('href', '/');
 
-      fireEvent.click(screen.getByRole('button', { name: /cerrar sesión/i }));
+      // La Navbar también tiene "Cerrar sesión": se usa el botón del menú lateral (el que no está en <nav>)
+      const botonDelMenu = screen
+        .getAllByRole('button', { name: /cerrar sesión/i })
+        .find((boton) => !boton.closest('nav'));
+      fireEvent.click(botonDelMenu);
       expect(window.location.pathname).toBe('/');
       expect(screen.getByRole('link', { name: 'Iniciar sesión' })).toBeInTheDocument();
+      expect(localStorage.getItem('token')).toBeNull();
     });
   });
 
@@ -242,7 +254,7 @@ describe('Pruebas del panel de administración', () => {
       expect(obtenerUsuarios()).toHaveLength(2);
 
       fireEvent.click(within(filaCon('admin@levelup.cl')).getByTitle('Editar'));
-      fireEvent.change(ventana().querySelector('select'), { target: { value: 'cliente' } });
+      fireEvent.change(ventana().querySelector('select'), { target: { value: 'CLIENTE' } });
       fireEvent.click(within(ventana()).getByRole('button', { name: /guardar cambios/i }));
       expect(screen.getByText('No puedes quitarte el rol de administrador a ti mismo')).toBeInTheDocument();
     });
@@ -305,20 +317,34 @@ describe('Pruebas del panel de administración', () => {
   });
 
   describe('Perfil del administrador (RF20)', () => {
-    it('rechaza una contraseña débil y guarda los cambios válidos', () => {
+    it('carga los datos con /auth/perfil y el correo no se puede editar', async () => {
       abrirAdminEn('/admin/perfil');
 
-      fireEvent.change(screen.getByLabelText('Nueva contraseña'), { target: { value: 'abc' } });
+      expect(await screen.findByLabelText('Nombre')).toHaveValue('Admin');
+      expect(screen.getByLabelText(/correo electrónico/i)).toHaveValue('admin@levelup.cl');
+      expect(screen.getByLabelText(/correo electrónico/i)).toBeDisabled();
+    });
+
+    it('rechaza una contraseña débil y guarda los cambios válidos con PUT /auth/perfil', async () => {
+      abrirAdminEn('/admin/perfil');
+
+      fireEvent.change(await screen.findByLabelText('Nueva contraseña'), { target: { value: 'abc' } });
       fireEvent.click(screen.getByRole('button', { name: /guardar cambios/i }));
       expect(screen.getByText(/mínimo 8 caracteres/i)).toBeInTheDocument();
+      expect(actualizarPerfil).not.toHaveBeenCalled();
 
       fireEvent.change(screen.getByLabelText('Nombre'), { target: { value: 'Valentina' } });
       fireEvent.change(screen.getByLabelText('Nueva contraseña'), { target: { value: 'clave2026' } });
       fireEvent.change(screen.getByLabelText('Confirmar contraseña'), { target: { value: 'clave2026' } });
       fireEvent.click(screen.getByRole('button', { name: /guardar cambios/i }));
 
-      expect(screen.getByText(/actualizado correctamente/i)).toBeInTheDocument();
-      expect(obtenerUsuarioPorId(1)).toMatchObject({ nombre: 'Valentina', password: 'clave2026' });
+      expect(await screen.findByText(/actualizado correctamente/i)).toBeInTheDocument();
+      // Formato PerfilRequest: sin correo, rol, puntos ni descuento
+      expect(actualizarPerfil).toHaveBeenCalledWith({
+        nombre: 'Valentina', apellidos: 'Level-Up', fechaNacimiento: '1995-05-10', password: 'clave2026',
+      });
+      expect(authDb.usuarios[0].nombre).toBe('Valentina');
+      expect(authDb.passwordDe('admin@levelup.cl')).toBe('clave2026');
       expect(screen.getByTitle('Ver mi perfil')).toHaveTextContent('Hola, Valentina');
     });
   });

@@ -18,7 +18,7 @@ describe('Pruebas unitarias en data/usuarios.js (CRUD)', () => {
   it('carga el administrador y el cliente de prueba', () => {
     const usuarios = obtenerUsuarios();
     expect(usuarios).toHaveLength(2);
-    expect(usuarios[0].rol).toBe('admin');
+    expect(usuarios[0].rol).toBe('ADMIN');
   });
 
   it('crearUsuario guarda el correo en minúsculas, activa el descuento Duoc y genera código de referido', () => {
@@ -32,7 +32,7 @@ describe('Pruebas unitarias en data/usuarios.js (CRUD)', () => {
 
     expect(nuevo.correo).toBe('maria@duocuc.cl');
     expect(nuevo.descuentoDuoc).toBe(true);
-    expect(nuevo.rol).toBe('cliente');
+    expect(nuevo.rol).toBe('CLIENTE');
     expect(nuevo.puntos).toBe(0);
     // El código usa solo letras sin tilde del nombre: "María" -> "MARA"
     expect(nuevo.codigoReferido).toMatch(/^LVLMARA\d{2}$/);

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { rutaInicialPorRol } from '../utils/roles';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -8,12 +9,14 @@ export default function Login() {
 
   const [formData, setFormData] = useState({ correo: '', password: '' });
   const [error, setError] = useState('');
+  const [cargando, setCargando] = useState(false);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = (e) => {
+  // POST /auth/login (a través de AuthContext → authService)
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (!formData.correo.trim() || !formData.password) {
@@ -21,14 +24,17 @@ export default function Login() {
       return;
     }
 
-    const resultado = iniciarSesion(formData.correo, formData.password);
-    if (!resultado.ok) {
-      setError(resultado.error);
-      return;
+    setError('');
+    setCargando(true);
+    try {
+      const usuario = await iniciarSesion(formData.correo, formData.password);
+      // Cada rol entra a su página: ADMIN → /admin, VENDEDOR → /admin/productos, CLIENTE → /
+      navigate(rutaInicialPorRol(usuario.rol));
+    } catch (err) {
+      // Ej: 401 "Correo o contraseña incorrectos", o el backend apagado
+      setError(err.message);
+      setCargando(false);
     }
-
-    // El administrador entra directo a su panel
-    navigate(resultado.usuario.rol === 'admin' ? '/admin' : '/');
   };
 
   return (
@@ -40,7 +46,7 @@ export default function Login() {
         </div>
 
         <div className="card-body p-4">
-          {error && <div className="alert alert-danger py-2">{error}</div>}
+          {error && <div className="alert alert-danger py-2" role="alert">{error}</div>}
 
           <form onSubmit={handleSubmit}>
             <div className="mb-3">
@@ -67,8 +73,13 @@ export default function Login() {
             </div>
 
             <div className="d-grid">
-              <button type="submit" className="btn btn-info btn-lg fw-bold text-dark">
-                Ingresar
+              {/* Deshabilitado mientras se espera la respuesta del backend */}
+              <button type="submit" className="btn btn-info btn-lg fw-bold text-dark" disabled={cargando}>
+                {cargando ? (
+                  <><span className="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Ingresando...</>
+                ) : (
+                  'Ingresar'
+                )}
               </button>
             </div>
           </form>
