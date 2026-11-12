@@ -2,6 +2,7 @@
 import ps5Img from '../assets/ps5.jpg';
 import catanImg from '../assets/catan.jpg';
 import sillaImg from '../assets/silla.jpg';
+import { esOferta, obtenerPrecioFinal, obtenerPorcentajeDescuento } from '../utils/precios';
 
 // Los id 1 a 5 son los productos originales: las órdenes de ejemplo (ordenes.js) los
 // referencian por id, así que no deben cambiar. Los productos nuevos usan id desde el 6.
@@ -261,15 +262,9 @@ export const obtenerProductosCriticos = () => {
   return productos.filter((p) => p.stock <= p.stockCritico);
 };
 
-// Un producto está en oferta si tiene precio de oferta y es menor al precio normal
-export const esOferta = (producto) =>
-  Boolean(producto.precioOferta) && producto.precioOferta < producto.precio;
-
-// Precio que paga el cliente: el de oferta si corresponde, si no el normal
-export const obtenerPrecioFinal = (producto) =>
-  esOferta(producto) ? producto.precioOferta : producto.precio;
-
-export const obtenerPorcentajeDescuento = (producto) =>
-  esOferta(producto) ? Math.round((1 - producto.precioOferta / producto.precio) * 100) : 0;
+// esOferta, obtenerPrecioFinal y obtenerPorcentajeDescuento ahora viven en utils/precios.js
+// (son cálculos, no datos). Se reexportan aquí para que el carrito siga funcionando igual
+// hasta que este archivo se elimine (tarea F4).
+export { esOferta, obtenerPrecioFinal, obtenerPorcentajeDescuento };
 
 export const obtenerProductosEnOferta = () => obtenerProductos().filter(esOferta);

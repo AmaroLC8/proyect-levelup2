@@ -1,19 +1,24 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  obtenerCategorias,
+  listarCategorias,
   crearCategoria,
   actualizarCategoria,
   eliminarCategoria,
-  contarProductosPorCategoria,
-} from '../../data/categorias';
+} from '../../services/categoriasService';
+import { listarProductos } from '../../services/productosService';
+import EstadoCarga from '../../components/EstadoCarga';
 
 export default function AdminCategorias() {
-  const [categorias, setCategorias] = useState(() => obtenerCategorias());
+  const [categorias, setCategorias] = useState([]);
+  const [productos, setProductos] = useState([]); // solo para contar los productos de cada categoría
+  const [cargando, setCargando] = useState(true);
+  const [errorCarga, setErrorCarga] = useState(''); // el backend no respondió al listar
   const [busqueda, setBusqueda] = useState('');
   const [modoModal, setModoModal] = useState(null); // 'crear' | 'editar' | 'ver' | null
   const [categoriaSel, setCategoriaSel] = useState(null);
   const [error, setError] = useState('');
   const [errorTabla, setErrorTabla] = useState('');
+  const [guardando, setGuardando] = useState(false);
 
   // Estado del formulario
   const [form, setForm] = useState({
@@ -23,7 +28,27 @@ export default function AdminCategorias() {
     activa: true
   });
 
-  const recargarCategorias = () => setCategorias(obtenerCategorias());
+  // GET /categorias (todas, también las inactivas): después de crear, editar o eliminar
+  const recargarCategorias = () =>
+    listarCategorias()
+      .then((datos) => setCategorias(datos))
+      .catch((err) => setErrorCarga(err.message));
+
+  // Al abrir la página se piden categorías y productos en paralelo
+  useEffect(() => {
+    Promise.all([listarCategorias(), listarProductos()])
+      .then(([listaCategorias, listaProductos]) => {
+        setCategorias(listaCategorias);
+        setProductos(listaProductos);
+      })
+      .catch((err) => setErrorCarga(err.message))
+      .finally(() => setCargando(false));
+  }, []);
+
+  // Cantidad de productos de una categoría. El producto trae su categoría como objeto,
+  // así que se compara por id (antes se comparaba por nombre).
+  const contarProductosPorCategoria = (idCategoria) =>
+    productos.filter((p) => p.categoria?.id === idCategoria).length;
 
   const handleAbrirCrear = () => {
     setForm({
@@ -58,32 +83,53 @@ export default function AdminCategorias() {
     setCategoriaSel(null);
   };
 
-  const handleGuardar = (e) => {
+  // POST /categorias (crear) o PUT /categorias/{id} (editar).
+  // El backend valida los nombres repetidos (409) y su mensaje se muestra en el modal.
+  // Los productos guardan el id de la categoría, así que al renombrarla no hay que tocarlos.
+  const handleGuardar = async (e) => {
     e.preventDefault();
 
-    // El CRUD valida nombres repetidos y, al renombrar, actualiza los productos
-    const { id, ...datos } = form;
-    const resultado = modoModal === 'crear' ? crearCategoria(datos) : actualizarCategoria(id, datos);
-    if (!resultado.ok) {
-      setError(resultado.error);
-      return;
-    }
+    // Formato CategoriaRequest del backend: { nombre, descripcion, activa }
+    const datos = {
+      nombre: form.nombre.trim(),
+      descripcion: form.descripcion.trim(),
+      activa: form.activa,
+    };
 
-    recargarCategorias();
-    handleCerrarModal();
+    setGuardando(true);
+    try {
+      if (modoModal === 'crear') {
+        await crearCategoria(datos);
+      } else {
+        await actualizarCategoria(form.id, datos);
+      }
+      await recargarCategorias();
+      handleCerrarModal();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setGuardando(false);
+    }
   };
 
-  const handleEliminar = (cat) => {
-    // No se permite eliminar categorías con productos asociados
-    if (contarProductosPorCategoria(cat.nombre) > 0) {
-      setErrorTabla(eliminarCategoria(cat.id).error);
+  // DELETE /categorias/{id}
+  const handleEliminar = async (cat) => {
+    // No se permite eliminar categorías con productos asociados: se avisa sin preguntar ni llamar
+    // a la API. El backend también lo revisa (409) por si los datos de la página están desactualizados.
+    const cantidad = contarProductosPorCategoria(cat.id);
+    if (cantidad > 0) {
+      setErrorTabla(`No se puede eliminar: tiene ${cantidad} producto(s) asociado(s)`);
       return;
     }
     if (!window.confirm('¿Estás seguro de eliminar esta categoría?')) return;
 
-    eliminarCategoria(cat.id);
-    setErrorTabla('');
-    recargarCategorias();
+    try {
+      await eliminarCategoria(cat.id);
+      setErrorTabla('');
+      await recargarCategorias();
+    } catch (err) {
+      setErrorTabla(err.message);
+    }
   };
 
   // Filtro de búsqueda
@@ -133,6 +179,8 @@ export default function AdminCategorias() {
         </div>
       </div>
 
+      <EstadoCarga cargando={cargando} error={errorCarga} />
+
       {errorTabla && (
         <div className="alert alert-danger py-2 d-flex justify-content-between align-items-center">
           {errorTabla}
@@ -140,7 +188,8 @@ export default function AdminCategorias() {
         </div>
       )}
 
-      {/* Tabla de Categorías */}
+      {/* Tabla de Categorías (cuando ya terminó la carga sin errores) */}
+      {!cargando && !errorCarga && (
       <div className="card bg-dark border-secondary shadow-sm">
         <div className="table-responsive">
           <table className="table table-dark table-hover align-middle mb-0">
@@ -162,7 +211,7 @@ export default function AdminCategorias() {
                 </tr>
               ) : (
                 categoriasFiltradas.map((cat) => {
-                  const numProds = contarProductosPorCategoria(cat.nombre);
+                  const numProds = contarProductosPorCategoria(cat.id);
                   return (
                     <tr key={cat.id}>
                       <td className="fw-bold text-light">
@@ -213,6 +262,7 @@ export default function AdminCategorias() {
           </table>
         </div>
       </div>
+      )}
 
       {/* Modal de Crear / Editar / Ver */}
       {modoModal && (
@@ -237,7 +287,7 @@ export default function AdminCategorias() {
                       <strong>Estado:</strong> {categoriaSel?.activa ? 'Activa' : 'Inactiva'}
                     </li>
                     <li className="list-group-item bg-dark text-light border-secondary">
-                      <strong>Productos en el catálogo:</strong> {contarProductosPorCategoria(categoriaSel?.nombre)}
+                      <strong>Productos en el catálogo:</strong> {contarProductosPorCategoria(categoriaSel?.id)}
                     </li>
                   </ul>
                 </div>
@@ -282,7 +332,7 @@ export default function AdminCategorias() {
                     <button type="button" className="btn btn-outline-secondary" onClick={handleCerrarModal}>
                       Cancelar
                     </button>
-                    <button type="submit" className="btn btn-info fw-bold">
+                    <button type="submit" className="btn btn-info fw-bold" disabled={guardando}>
                       {modoModal === 'crear' ? 'Crear Categoría' : 'Guardar Cambios'}
                     </button>
                   </div>

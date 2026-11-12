@@ -1,11 +1,23 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { obtenerProductos } from '../data/productos';
+import { listarProductos } from '../services/productosService';
 import ProductCard from '../components/ProductCard';
+import EstadoCarga from '../components/EstadoCarga';
 import videoHero from '../assets/ps5.mp4';
 
 export default function Home() {
-  const productos = obtenerProductos();
+  // Los productos vienen del backend (GET /productos); mientras llegan se muestra "Cargando..."
+  const [productos, setProductos] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState('');
+
+  // Se ejecuta una sola vez al abrir la página ([] = sin dependencias)
+  useEffect(() => {
+    listarProductos()
+      .then((datos) => setProductos(datos))
+      .catch((err) => setError(err.message))
+      .finally(() => setCargando(false));
+  }, []);
 
   return (
     <div className="container py-4">
@@ -73,6 +85,8 @@ export default function Home() {
           Ver catálogo completo →
         </Link>
       </div>
+
+      <EstadoCarga cargando={cargando} error={error} />
 
       {/* Grilla de 3 columnas */}
       <div className="row g-4">

@@ -31,11 +31,11 @@ vi.mock('../context/CartContext', () => ({
   }),
 }));
 
-// Producto simulado de prueba
+// Producto simulado de prueba (formato del backend: la categoría es un objeto)
 const productoMock = {
   id: 1,
   nombre: 'PlayStation 5 Slim 1TB',
-  categoria: 'Consolas',
+  categoria: { id: 1, nombre: 'Consolas', descripcion: 'Consolas de última generación y retro.', activa: true },
   precio: 499990,
   stock: 8,
   stockCritico: 3,

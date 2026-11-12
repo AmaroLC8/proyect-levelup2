@@ -1,31 +1,53 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
-  obtenerProductos,
+  listarProductos,
   crearProducto,
   actualizarProducto,
   eliminarProducto,
-  esOferta,
-} from '../../data/productos';
-import { obtenerCategorias } from '../../data/categorias';
+} from '../../services/productosService';
+import { listarCategorias } from '../../services/categoriasService';
+import { esOferta } from '../../utils/precios';
 import { formatearDinero } from '../../utils/formato';
+import EstadoCarga from '../../components/EstadoCarga';
+
+// Imagen usada cuando el administrador crea un producto sin URL de imagen
+const IMAGEN_POR_DEFECTO = "https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=500&auto=format&fit=crop";
+
+// Convierte los datos del formulario (todo llega como texto) al JSON que espera el backend
+// (ProductoRequest): números en precio y stock, precioOferta null si está vacío
+// y la categoría solo como categoriaId (el backend busca la categoría completa).
+const armarProductoRequest = (form) => ({
+  nombre: form.nombre.trim(),
+  descripcion: form.descripcion.trim(),
+  precio: Number(form.precio),
+  precioOferta: form.precioOferta ? Number(form.precioOferta) : null,
+  stock: Number(form.stock),
+  stockCritico: Number(form.stockCritico),
+  imagen: form.imagen.trim() || IMAGEN_POR_DEFECTO,
+  categoriaId: Number(form.categoriaId),
+});
 
 export default function AdminProductos() {
   // ?criticos=1 llega desde el dashboard para abrir el listado de productos críticos (RF15)
   const [searchParams] = useSearchParams();
-  const [productos, setProductos] = useState(() => obtenerProductos());
+  const [productos, setProductos] = useState([]);
+  const [categorias, setCategorias] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [errorCarga, setErrorCarga] = useState(''); // el backend no respondió al listar
+  const [errorTabla, setErrorTabla] = useState(''); // error al eliminar (ej: producto ya vendido)
   const [filtro, setFiltro] = useState('');
   const [soloCriticos, setSoloCriticos] = useState(searchParams.get('criticos') === '1');
   const [modoModal, setModoModal] = useState(null); // 'crear' | 'editar' | 'ver' | null
   const [productoSel, setProductoSel] = useState(null);
-  const [error, setError] = useState('');
-  const categorias = obtenerCategorias();
+  const [error, setError] = useState(''); // error del formulario (validación o respuesta del backend)
+  const [guardando, setGuardando] = useState(false);
 
-  // Estado del formulario
+  // Estado del formulario. La categoría se guarda como id (categoriaId), igual que la pide el backend
   const [form, setForm] = useState({
     id: null,
     nombre: '',
-    categoria: '',
+    categoriaId: '',
     precio: '',
     precioOferta: '',
     stock: '',
@@ -34,13 +56,29 @@ export default function AdminProductos() {
     imagen: ''
   });
 
-  const recargarProductos = () => setProductos(obtenerProductos());
+  // GET /productos: se usa al abrir la página y después de crear, editar o eliminar
+  const recargarProductos = () =>
+    listarProductos()
+      .then((datos) => setProductos(datos))
+      .catch((err) => setErrorCarga(err.message));
+
+  // Al abrir la página se piden productos y categorías (todas, también las inactivas) en paralelo.
+  // La lista de stock crítico se filtra aquí con los productos ya cargados.
+  useEffect(() => {
+    Promise.all([listarProductos(), listarCategorias()])
+      .then(([listaProductos, listaCategorias]) => {
+        setProductos(listaProductos);
+        setCategorias(listaCategorias);
+      })
+      .catch((err) => setErrorCarga(err.message))
+      .finally(() => setCargando(false));
+  }, []);
 
   const handleAbrirCrear = () => {
     setForm({
       id: null,
       nombre: '',
-      categoria: categorias[0]?.nombre ?? '',
+      categoriaId: categorias[0]?.id ?? '',
       precio: '',
       precioOferta: '',
       stock: '',
@@ -57,7 +95,7 @@ export default function AdminProductos() {
     setForm({
       id: prod.id,
       nombre: prod.nombre,
-      categoria: prod.categoria,
+      categoriaId: prod.categoria?.id ?? '',
       precio: prod.precio,
       precioOferta: prod.precioOferta || '',
       stock: prod.stock,
@@ -79,36 +117,51 @@ export default function AdminProductos() {
     setProductoSel(null);
   };
 
-  const handleGuardar = (evento) => {
+  // POST /productos (crear) o PUT /productos/{id} (editar). Si el backend responde con error
+  // (datos inválidos, sin permiso, etc.) el modal queda abierto y muestra su mensaje.
+  const handleGuardar = async (evento) => {
     evento.preventDefault();
 
+    // Se revisa antes de enviar para no hacer una petición que el backend rechazaría (400)
     if (form.precioOferta && Number(form.precioOferta) >= Number(form.precio)) {
       setError('El precio de oferta debe ser menor al precio base');
       return;
     }
 
-    // El CRUD de data/productos.js convierte los números y asigna id e imagen por defecto
-    const { id, ...datos } = form;
-    if (modoModal === 'crear') {
-      crearProducto(datos);
-    } else if (modoModal === 'editar') {
-      actualizarProducto(id, datos);
+    const datos = armarProductoRequest(form);
+    setGuardando(true);
+    try {
+      if (modoModal === 'crear') {
+        await crearProducto(datos);
+      } else if (modoModal === 'editar') {
+        await actualizarProducto(form.id, datos);
+      }
+      await recargarProductos();
+      handleCerrarModal();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setGuardando(false);
     }
-
-    recargarProductos();
-    handleCerrarModal();
   };
 
-  const handleEliminar = (idProducto) => {
-    if (window.confirm('¿Estás seguro de eliminar este producto del inventario?')) {
-      eliminarProducto(idProducto);
-      recargarProductos();
+  // DELETE /productos/{id}. El backend no permite eliminar un producto que ya se vendió (409)
+  const handleEliminar = async (idProducto) => {
+    if (!window.confirm('¿Estás seguro de eliminar este producto del inventario?')) return;
+
+    try {
+      await eliminarProducto(idProducto);
+      setErrorTabla('');
+      await recargarProductos();
+    } catch (err) {
+      setErrorTabla(err.message);
     }
   };
 
   const productosFiltrados = productos.filter((item) => {
     const nombre = (item.nombre || item.titulo || '').toLowerCase();
-    const cat = (item.categoria || '').toLowerCase();
+    // El backend envía la categoría como objeto { id, nombre, ... }
+    const cat = (item.categoria?.nombre || '').toLowerCase();
     const coincideBusqueda = nombre.includes(filtro.toLowerCase()) || cat.includes(filtro.toLowerCase());
     
     const umbralCritico = item.stockCritico ?? 5;
@@ -173,7 +226,17 @@ export default function AdminProductos() {
         </div>
       </div>
 
-      {/* Tabla de Productos */}
+      <EstadoCarga cargando={cargando} error={errorCarga} />
+
+      {errorTabla && (
+        <div className="alert alert-danger py-2 d-flex justify-content-between align-items-center">
+          {errorTabla}
+          <button type="button" className="btn-close" aria-label="Cerrar" onClick={() => setErrorTabla('')}></button>
+        </div>
+      )}
+
+      {/* Tabla de Productos (cuando ya terminó la carga sin errores) */}
+      {!cargando && !errorCarga && (
       <div className="card bg-dark border-secondary shadow-sm">
         <div className="table-responsive">
           <table className="table table-dark table-hover align-middle mb-0">
@@ -218,7 +281,7 @@ export default function AdminProductos() {
                         </div>
                       </td>
                       <td>
-                        <span className="badge bg-secondary">{prod.categoria}</span>
+                        <span className="badge bg-secondary">{prod.categoria?.nombre}</span>
                       </td>
                       <td className="fw-bold">{formatearDinero(prod.precio)}</td>
                       <td>
@@ -269,6 +332,7 @@ export default function AdminProductos() {
           </table>
         </div>
       </div>
+      )}
 
       {/* Modal de Crear / Editar / Ver */}
       {modoModal && (
@@ -307,7 +371,7 @@ export default function AdminProductos() {
                       <p className="text-secondary">{productoSel?.descripcion || 'Sin descripción disponible.'}</p>
                       <ul className="list-group list-group-flush bg-dark text-light">
                         <li className="list-group-item bg-dark text-light border-secondary">
-                          <strong>Categoría:</strong> {productoSel?.categoria}
+                          <strong>Categoría:</strong> {productoSel?.categoria?.nombre}
                         </li>
                         <li className="list-group-item bg-dark text-light border-secondary">
                           <strong>Precio Base:</strong> {formatearDinero(productoSel?.precio)}
@@ -345,11 +409,12 @@ export default function AdminProductos() {
                         <label className="form-label text-secondary small fw-bold">Categoría</label>
                         <select
                           className="form-select bg-dark text-light border-secondary"
-                          value={form.categoria}
-                          onChange={(evento) => setForm({ ...form, categoria: evento.target.value })}
+                          value={form.categoriaId}
+                          onChange={(evento) => setForm({ ...form, categoriaId: evento.target.value })}
                         >
+                          {/* El valor de cada opción es el id: es lo que se envía como categoriaId */}
                           {categorias.map((cat) => (
-                            <option key={cat.id} value={cat.nombre}>{cat.nombre}</option>
+                            <option key={cat.id} value={cat.id}>{cat.nombre}</option>
                           ))}
                         </select>
                       </div>
@@ -431,7 +496,8 @@ export default function AdminProductos() {
                     >
                       Cancelar
                     </button>
-                    <button type="submit" className="btn btn-info fw-bold">
+                    {/* Deshabilitado mientras se espera la respuesta, para no enviar dos veces */}
+                    <button type="submit" className="btn btn-info fw-bold" disabled={guardando}>
                       {modoModal === 'crear' ? 'Guardar Producto' : 'Actualizar Cambios'}
                     </button>
                   </div>

@@ -10,7 +10,10 @@ import DesgloseTotales from '../components/DesgloseTotales';
 import EstadoOrden from '../components/EstadoOrden';
 import RutaProtegidaAdmin from '../components/RutaProtegida';
 import Navbar from '../components/Navbar';
-import { obtenerProductoPorId } from '../data/productos';
+import { PRODUCTOS_PRUEBA } from './backendSimulado';
+
+// Productos con el formato que entrega el backend (categoría como objeto)
+const obtenerProductoPorId = (id) => PRODUCTOS_PRUEBA.find((p) => p.id === id);
 
 // Muestra la ruta actual para comprobar a dónde navegó un componente
 const RutaActual = () => {

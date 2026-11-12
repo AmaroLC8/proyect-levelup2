@@ -12,3 +12,15 @@ export const desglosarIva = (totalConIva) => {
   const neto = Math.round(totalConIva / (1 + TASA_IVA / 100));
   return { neto, iva: totalConIva - neto };
 };
+
+// Un producto está en oferta si tiene precio de oferta y es menor al precio normal
+export const esOferta = (producto) =>
+  Boolean(producto.precioOferta) && producto.precioOferta < producto.precio;
+
+// Precio que paga el cliente: el de oferta si corresponde, si no el normal
+export const obtenerPrecioFinal = (producto) =>
+  esOferta(producto) ? producto.precioOferta : producto.precio;
+
+// Porcentaje de descuento redondeado, ej: 159.990 → 129.990 = 19%
+export const obtenerPorcentajeDescuento = (producto) =>
+  esOferta(producto) ? Math.round((1 - producto.precioOferta / producto.precio) * 100) : 0;

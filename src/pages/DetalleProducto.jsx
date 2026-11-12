@@ -1,20 +1,52 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import {
-  obtenerProductoPorId,
-  obtenerProductos,
-  esOferta,
-  obtenerPrecioFinal,
-  obtenerPorcentajeDescuento,
-} from '../data/productos';
+import { obtenerProducto, listarProductos } from '../services/productosService';
+import { esOferta, obtenerPrecioFinal, obtenerPorcentajeDescuento } from '../utils/precios';
 import { useCart } from '../context/CartContext';
 import ProductCard from '../components/ProductCard';
+import EstadoCarga from '../components/EstadoCarga';
 import { formatearDinero } from '../utils/formato';
 
+// Lee el id de la URL y dibuja el detalle con key={id}: al pasar de un producto a otro
+// (por ejemplo, desde "Productos relacionados") React crea el detalle desde cero,
+// así vuelve a mostrar "Cargando..." y no queda a la vista el producto anterior.
 export default function DetalleProducto() {
   const { id } = useParams();
+  return <DetalleDeUnProducto key={id} id={id} />;
+}
+
+function DetalleDeUnProducto({ id }) {
   const { agregarAlCarrito } = useCart();
-  const producto = obtenerProductoPorId(id);
+  const [producto, setProducto] = useState(null);
+  const [relacionados, setRelacionados] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    // 1) GET /productos/{id}
+    obtenerProducto(id)
+      .then((datos) => {
+        setProducto(datos);
+        // 2) GET /productos?categoriaId=... para los relacionados: hasta 3 de la misma
+        //    categoría, sin incluir el actual. Si esta llamada falla, solo no se muestran.
+        return listarProductos({ categoriaId: datos.categoria.id })
+          .then((lista) => setRelacionados(lista.filter((p) => p.id !== datos.id).slice(0, 3)))
+          .catch(() => setRelacionados([]));
+      })
+      .catch((err) => {
+        // Un 404 se muestra como "Producto no encontrado" (más abajo); otro error, en la alerta
+        if (err.status !== 404) setError(err.message);
+      })
+      .finally(() => setCargando(false));
+  }, [id]);
+
+  if (cargando || error) {
+    return (
+      <div className="container py-4">
+        <EstadoCarga cargando={cargando} error={error} />
+      </div>
+    );
+  }
 
   // Si el id de la URL no existe (por ejemplo, producto eliminado desde el admin)
   if (!producto) {
@@ -31,11 +63,6 @@ export default function DetalleProducto() {
   }
 
   const sinStock = producto.stock <= 0;
-
-  // Hasta 3 productos de la misma categoría, sin incluir el actual
-  const relacionados = obtenerProductos()
-    .filter((p) => p.categoria === producto.categoria && p.id !== producto.id)
-    .slice(0, 3);
 
   return (
     <div className="container py-4">
@@ -87,7 +114,7 @@ export default function DetalleProducto() {
               textTransform: 'uppercase',
             }}
           >
-            {producto.categoria}
+            {producto.categoria?.nombre}
           </span>
 
           <h1 className="fw-bold fs-2 mb-3" style={{ color: '#ffffff' }}>

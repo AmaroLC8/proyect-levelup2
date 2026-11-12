@@ -1,12 +1,16 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { obtenerProductos, obtenerPrecioFinal } from '../data/productos';
-import { obtenerCategoriasActivas } from '../data/categorias';
+import { listarProductos } from '../services/productosService';
+import { listarCategoriasActivas } from '../services/categoriasService';
+import { obtenerPrecioFinal } from '../utils/precios';
 import ProductCard from '../components/ProductCard';
+import EstadoCarga from '../components/EstadoCarga';
 
 export default function Productos() {
-  const categorias = obtenerCategoriasActivas();
-  const productos = obtenerProductos();
+  const [categorias, setCategorias] = useState([]);
+  const [productos, setProductos] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState('');
   const [filtroCategoria, setFiltroCategoria] = useState('Todas');
   const [precioMaximo, setPrecioMaximo] = useState('');
 
@@ -15,12 +19,24 @@ export default function Productos() {
   const busqueda = searchParams.get('buscar') ?? '';
   const setBusqueda = (texto) => setSearchParams(texto ? { buscar: texto } : {}, { replace: true });
 
-  // Los productos de categorías desactivadas en el admin no se muestran en la tienda
-  const nombresActivos = categorias.map((c) => c.nombre);
+  // Se cargan productos y categorías una sola vez, en paralelo (Promise.all).
+  // Los filtros se aplican aquí en el navegador, así responden al instante mientras se escribe
+  // y se puede filtrar por precio máximo (el backend solo filtra por categoría y texto).
+  useEffect(() => {
+    Promise.all([listarProductos(), listarCategoriasActivas()])
+      .then(([listaProductos, listaCategorias]) => {
+        setProductos(listaProductos);
+        setCategorias(listaCategorias);
+      })
+      .catch((err) => setError(err.message))
+      .finally(() => setCargando(false));
+  }, []);
 
   const productosFiltrados = productos.filter((p) => {
-    const categoriaVisible = nombresActivos.includes(p.categoria);
-    const coincideCategoria = categoriaVisible && (filtroCategoria === 'Todas' || p.categoria === filtroCategoria);
+    // Los productos de categorías desactivadas en el admin no se muestran en la tienda.
+    // El backend envía la categoría como objeto, con su campo "activa".
+    const categoriaVisible = p.categoria?.activa;
+    const coincideCategoria = categoriaVisible && (filtroCategoria === 'Todas' || p.categoria.nombre === filtroCategoria);
     const coincideTexto = p.nombre.toLowerCase().includes(busqueda.toLowerCase());
     const coincidePrecio = !precioMaximo || obtenerPrecioFinal(p) <= Number(precioMaximo);
     return coincideCategoria && coincideTexto && coincidePrecio;
@@ -92,20 +108,24 @@ export default function Productos() {
         </div>
       </div>
 
-      {/* Grilla de Productos */}
-      <div className="row g-4">
-        {productosFiltrados.length > 0 ? (
-          productosFiltrados.map((prod) => (
-            <div className="col-12 col-md-6 col-lg-4" key={prod.id}>
-              <ProductCard producto={prod} />
+      <EstadoCarga cargando={cargando} error={error} />
+
+      {/* Grilla de Productos (se muestra cuando ya terminó la carga sin errores) */}
+      {!cargando && !error && (
+        <div className="row g-4">
+          {productosFiltrados.length > 0 ? (
+            productosFiltrados.map((prod) => (
+              <div className="col-12 col-md-6 col-lg-4" key={prod.id}>
+                <ProductCard producto={prod} />
+              </div>
+            ))
+          ) : (
+            <div className="col-12 text-center py-5" style={{ color: '#94a3b8' }}>
+              No se encontraron productos con esos filtros.
             </div>
-          ))
-        ) : (
-          <div className="col-12 text-center py-5" style={{ color: '#94a3b8' }}>
-            No se encontraron productos con esos filtros.
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

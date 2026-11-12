@@ -1,10 +1,14 @@
 import React from 'react';
-import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 import App from '../App';
 import { obtenerOrdenes } from '../data/ordenes';
-import { obtenerProductoPorId } from '../data/productos';
-import { crearCategoria } from '../data/categorias';
+import { simularBackend, simularBackendCaido } from './backendSimulado';
+
+// Los services se reemplazan por funciones simuladas: las pruebas no llaman al backend real.
+// simularBackend() (en beforeEach) les da respuestas con los datos de backendSimulado.js
+vi.mock('../services/productosService');
+vi.mock('../services/categoriasService');
 
 // Abre la aplicación completa en la ruta indicada, como lo haría el usuario
 const abrirEn = (ruta) => {
@@ -19,25 +23,45 @@ const escribir = (name, valor) => fireEvent.change(campo(name), { target: { valu
 const rutaActual = () => window.location.pathname;
 const tarjetasDeProducto = () => screen.queryAllByRole('button', { name: /añadir/i });
 
+// Las páginas piden los datos a la API (asíncrono): se espera a que desaparezca el "Cargando..."
+const esperarCarga = () =>
+  waitFor(() => expect(screen.queryByText('Cargando...')).not.toBeInTheDocument());
+
 describe('Pruebas de las vistas de la tienda', () => {
+  let db; // "base de datos" del backend simulado
+
   beforeEach(() => {
     localStorage.clear();
+    db = simularBackend();
   });
 
   describe('Home y Catálogo', () => {
-    it('el Home muestra 3 productos destacados', () => {
+    it('el Home muestra 3 productos destacados', async () => {
       abrirEn('/');
       expect(screen.getByText('Productos Destacados')).toBeInTheDocument();
+      await esperarCarga();
       expect(tarjetasDeProducto()).toHaveLength(3);
     });
 
-    it('el catálogo renderiza todos los productos del conjunto de datos', () => {
+    it('el catálogo renderiza todos los productos que entrega el backend', async () => {
       abrirEn('/productos');
+      expect(screen.getByText('Cargando...')).toBeInTheDocument();
+      await esperarCarga();
       expect(tarjetasDeProducto()).toHaveLength(15);
     });
 
-    it('filtra por texto de búsqueda, categoría y precio máximo (RF2)', () => {
+    it('si el backend no responde, muestra un mensaje de error sin romper la página', async () => {
+      simularBackendCaido();
+      abrirEn('/productos');
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(/no se pudo conectar con el servidor/i);
+      expect(tarjetasDeProducto()).toHaveLength(0);
+      expect(screen.getByText('Catálogo Completo')).toBeInTheDocument();
+    });
+
+    it('filtra por texto de búsqueda, categoría y precio máximo (RF2)', async () => {
       abrirEn('/productos?buscar=mouse');
+      await esperarCarga();
       // "mouse" encuentra el Mouse Gamer y el Mousepad
       expect(tarjetasDeProducto()).toHaveLength(2);
 
@@ -51,18 +75,19 @@ describe('Pruebas de las vistas de la tienda', () => {
       expect(screen.getByText('Mouse Gamer 16000 DPI Sensor Óptico')).toBeInTheDocument();
     });
 
-    it('muestra un mensaje cuando ningún producto cumple los filtros', () => {
+    it('muestra un mensaje cuando ningún producto cumple los filtros', async () => {
       abrirEn('/productos?buscar=zzz');
+      await esperarCarga();
       expect(tarjetasDeProducto()).toHaveLength(0);
       expect(screen.getByText(/no se encontraron productos/i)).toBeInTheDocument();
     });
   });
 
   describe('Categorías y Ofertas', () => {
-    it('cambia los productos al seleccionar otra categoría sin recargar (RF8)', () => {
-      crearCategoria({ nombre: 'Streaming', descripcion: 'Categoría nueva, todavía sin productos' });
+    it('cambia los productos al seleccionar otra categoría sin recargar (RF8)', async () => {
+      db.categorias.push({ id: 7, nombre: 'Streaming', descripcion: 'Categoría nueva, todavía sin productos', activa: true });
       abrirEn('/categorias');
-      expect(screen.getByText('PlayStation 5 Slim 1TB')).toBeInTheDocument();
+      expect(await screen.findByText('PlayStation 5 Slim 1TB')).toBeInTheDocument();
 
       fireEvent.click(screen.getByRole('button', { name: /sillas/i }));
       expect(screen.getByText('Silla Gamer Ergonómica Pro')).toBeInTheDocument();
@@ -75,27 +100,52 @@ describe('Pruebas de las vistas de la tienda', () => {
       expect(screen.getByText(/aún no hay productos en esta categoría/i)).toBeInTheDocument();
     });
 
-    it('ofertas muestra solo productos con descuento, de mayor a menor % (RF9)', () => {
+    it('las categorías desactivadas no aparecen en la tienda', async () => {
+      db.categorias.find((c) => c.nombre === 'Sillas').activa = false;
+      abrirEn('/categorias');
+      await esperarCarga();
+
+      expect(screen.queryByRole('button', { name: /sillas/i })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /consolas/i })).toBeInTheDocument();
+    });
+
+    it('ofertas muestra solo productos con descuento, de mayor a menor % (RF9)', async () => {
       abrirEn('/ofertas');
-      const descuentos = screen.getAllByText(/^-\d+%$/).map((etiqueta) => etiqueta.textContent);
+      const descuentos = (await screen.findAllByText(/^-\d+%$/)).map((etiqueta) => etiqueta.textContent);
       expect(descuentos).toEqual(['-24%', '-21%', '-20%', '-19%', '-17%', '-17%', '-9%', '-8%', '-6%']);
       expect(screen.queryByText('PlayStation 5 Slim 1TB')).not.toBeInTheDocument();
     });
   });
 
   describe('Detalle de producto', () => {
-    it('muestra la información del producto y lo agrega al carrito (RF10)', () => {
+    it('muestra la información del producto y lo agrega al carrito (RF10)', async () => {
       abrirEn('/producto/1');
-      expect(screen.getByRole('heading', { name: 'PlayStation 5 Slim 1TB' })).toBeInTheDocument();
+      expect(await screen.findByRole('heading', { name: 'PlayStation 5 Slim 1TB' })).toBeInTheDocument();
       expect(screen.getByText('Stock disponible: 8 unidades')).toBeInTheDocument();
+      // La categoría llega como objeto desde el backend y se muestra su nombre
+      expect(screen.getAllByText('Consolas').length).toBeGreaterThan(0);
 
       fireEvent.click(screen.getByRole('button', { name: /añadir al carrito/i }));
       expect(screen.getByRole('link', { name: /carrito/i })).toHaveTextContent('Carrito $499.990');
     });
 
-    it('muestra "Producto no encontrado" si el id no existe', () => {
+    it('muestra productos relacionados de la misma categoría usando el filtro del backend', async () => {
+      abrirEn('/producto/1');
+      expect(await screen.findByText('Productos relacionados')).toBeInTheDocument();
+      expect(screen.getByText('Nintendo Switch OLED Mario Edition')).toBeInTheDocument();
+      expect(screen.getByText('Xbox Series X 1TB Black')).toBeInTheDocument();
+    });
+
+    it('muestra "Producto no encontrado" si el backend responde 404', async () => {
       abrirEn('/producto/999');
-      expect(screen.getByText('Producto no encontrado')).toBeInTheDocument();
+      expect(await screen.findByText('Producto no encontrado')).toBeInTheDocument();
+    });
+
+    it('si el backend no responde, muestra el error en vez de "Producto no encontrado"', async () => {
+      simularBackendCaido();
+      abrirEn('/producto/1');
+      expect(await screen.findByRole('alert')).toHaveTextContent(/no se pudo conectar con el servidor/i);
+      expect(screen.queryByText('Producto no encontrado')).not.toBeInTheDocument();
     });
   });
 
@@ -206,9 +256,9 @@ describe('Pruebas de las vistas de la tienda', () => {
       expect(screen.getByText('Ingresa un correo electrónico válido')).toBeInTheDocument();
     });
 
-    it('una compra pagada guarda la orden, descuenta stock y vacía el carrito (RF12)', () => {
+    it('una compra pagada guarda la orden y vacía el carrito (RF12)', async () => {
       abrirEn('/producto/5');
-      fireEvent.click(screen.getByRole('button', { name: /añadir al carrito/i }));
+      fireEvent.click(await screen.findByRole('button', { name: /añadir al carrito/i }));
       fireEvent.click(screen.getByRole('link', { name: /carrito/i }));
       fireEvent.click(screen.getByRole('link', { name: /comprar ahora/i }));
 
@@ -218,7 +268,8 @@ describe('Pruebas de las vistas de la tienda', () => {
       expect(rutaActual()).toBe('/pago-exitoso');
       expect(screen.getByText('¡Se ha realizado la compra con éxito!')).toBeInTheDocument();
       expect(obtenerOrdenes().at(-1).estado).toBe('pagada');
-      expect(obtenerProductoPorId(5).stock).toBe(1);
+      // El descuento de stock se probará cuando el checkout use el backend (tarea de boletas):
+      // hoy Checkout todavía lo descuenta en data/productos.js
       expect(screen.getByRole('link', { name: /carrito/i })).toHaveTextContent('Carrito $0');
     });
 

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
-import { esOferta, obtenerPrecioFinal, obtenerPorcentajeDescuento } from '../data/productos';
+import { esOferta, obtenerPrecioFinal, obtenerPorcentajeDescuento } from '../utils/precios';
 import { formatearDinero } from '../utils/formato';
 
 export default function ProductCard({ producto }) {
@@ -67,7 +67,8 @@ export default function ProductCard({ producto }) {
               textTransform: 'uppercase',
             }}
           >
-            {producto.categoria}
+            {/* El backend envía la categoría como objeto { id, nombre, ... } */}
+            {producto.categoria?.nombre}
           </span>
           <span style={{ color: '#94a3b8', fontSize: '0.8rem' }}>
             Stock: {producto.stock}

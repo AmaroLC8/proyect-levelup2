@@ -1,11 +1,16 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 import App from '../App';
-import { obtenerProductos, obtenerProductoPorId } from '../data/productos';
-import { obtenerCategorias, crearCategoria } from '../data/categorias';
 import { obtenerUsuarios, obtenerUsuarioPorId } from '../data/usuarios';
 import { crearOrden } from '../data/ordenes';
+import { crearProducto, actualizarProducto, eliminarProducto } from '../services/productosService';
+import { simularBackend, simularBackendCaido, errorDelBackend } from './backendSimulado';
+
+// Productos y categorías vienen del backend: se simulan los services (no se llama al backend real).
+// simularBackend() (en beforeEach) les da respuestas con los datos de backendSimulado.js
+vi.mock('../services/productosService');
+vi.mock('../services/categoriasService');
 
 // Abre la aplicación en una ruta del panel con la sesión del administrador (id 1)
 const abrirAdminEn = (ruta) => {
@@ -20,9 +25,17 @@ const camposDeVentana = () => ventana().querySelectorAll('input, textarea');
 const escribirEn = (elemento, valor) => fireEvent.change(elemento, { target: { value: valor } });
 const filaCon = (texto) => screen.getByText(texto).closest('tr');
 
+// Las páginas piden los datos a la API (asíncrono): se espera a que desaparezca el "Cargando..."
+const esperarCarga = () =>
+  waitFor(() => expect(screen.queryByText('Cargando...')).not.toBeInTheDocument());
+
 describe('Pruebas del panel de administración', () => {
+  let db; // "base de datos" del backend simulado
+
   beforeEach(() => {
     localStorage.clear();
+    vi.clearAllMocks(); // borra las llamadas registradas en la prueba anterior (ej: crearProducto)
+    db = simularBackend();
     // Simula que el administrador acepta los mensajes de confirmación al eliminar
     vi.spyOn(window, 'confirm').mockReturnValue(true);
   });
@@ -55,9 +68,9 @@ describe('Pruebas del panel de administración', () => {
   });
 
   describe('Productos (RF14 y RF15)', () => {
-    it('lista todos los productos y filtra los de stock crítico desde el dashboard', () => {
+    it('lista todos los productos y filtra los de stock crítico desde el dashboard', async () => {
       abrirAdminEn('/admin/productos');
-      expect(screen.getByText('Mostrando: 15 / 15')).toBeInTheDocument();
+      expect(await screen.findByText('Mostrando: 15 / 15')).toBeInTheDocument();
 
       fireEvent.click(screen.getByLabelText(/ver solo stock crítico/i));
       expect(screen.getByText('Mostrando: 5 / 15')).toBeInTheDocument();
@@ -65,79 +78,131 @@ describe('Pruebas del panel de administración', () => {
       expect(screen.queryByText('PlayStation 5 Slim 1TB')).not.toBeInTheDocument();
     });
 
-    it('crea un producto nuevo y valida que la oferta sea menor al precio base', () => {
+    it('si el backend no responde, muestra el error en vez de la tabla', async () => {
+      simularBackendCaido();
       abrirAdminEn('/admin/productos');
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(/no se pudo conectar con el servidor/i);
+      expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    });
+
+    it('crea un producto nuevo enviando categoriaId y valida que la oferta sea menor al precio base', async () => {
+      abrirAdminEn('/admin/productos');
+      await esperarCarga();
       fireEvent.click(screen.getByRole('button', { name: /nuevo producto/i }));
 
       const [nombre, precio, oferta, stock] = camposDeVentana();
       escribirEn(nombre, 'Audífonos Inalámbricos');
-      fireEvent.change(ventana().querySelector('select'), { target: { value: 'Periféricos' } });
+      // Las opciones del select usan el id de la categoría (2 = Periféricos)
+      fireEvent.change(ventana().querySelector('select'), { target: { value: '2' } });
       escribirEn(precio, '39990');
       escribirEn(oferta, '45990');
       escribirEn(stock, '12');
       fireEvent.click(within(ventana()).getByRole('button', { name: /guardar producto/i }));
       expect(screen.getByText('El precio de oferta debe ser menor al precio base')).toBeInTheDocument();
+      expect(crearProducto).not.toHaveBeenCalled();
 
       escribirEn(oferta, '');
       fireEvent.click(within(ventana()).getByRole('button', { name: /guardar producto/i }));
 
-      expect(ventana()).toBeNull();
-      expect(screen.getByText('Audífonos Inalámbricos')).toBeInTheDocument();
-      const creado = obtenerProductos().at(-1);
-      expect(creado).toMatchObject({ nombre: 'Audífonos Inalámbricos', categoria: 'Periféricos', precio: 39990, stock: 12 });
+      await waitFor(() => expect(ventana()).toBeNull());
+      expect(await screen.findByText('Audífonos Inalámbricos')).toBeInTheDocument();
+      // Se envió el formato ProductoRequest: números y la categoría solo como categoriaId
+      expect(crearProducto).toHaveBeenCalledWith(
+        expect.objectContaining({ nombre: 'Audífonos Inalámbricos', categoriaId: 2, precio: 39990, precioOferta: null, stock: 12 })
+      );
+      expect(db.productos.at(-1)).toMatchObject({ nombre: 'Audífonos Inalámbricos', categoria: { nombre: 'Periféricos' } });
     });
 
-    it('edita el stock de un producto y lo elimina previa confirmación', () => {
+    it('si el backend rechaza el producto, el modal queda abierto con su mensaje', async () => {
+      vi.mocked(crearProducto).mockRejectedValueOnce(
+        errorDelBackend(401, 'Debes iniciar sesión para acceder a este recurso')
+      );
       abrirAdminEn('/admin/productos');
+      await esperarCarga();
+      fireEvent.click(screen.getByRole('button', { name: /nuevo producto/i }));
+
+      const [nombre, precio, , stock] = camposDeVentana();
+      escribirEn(nombre, 'Control Inalámbrico');
+      escribirEn(precio, '49990');
+      escribirEn(stock, '3');
+      fireEvent.click(within(ventana()).getByRole('button', { name: /guardar producto/i }));
+
+      expect(await within(ventana()).findByText('Debes iniciar sesión para acceder a este recurso')).toBeInTheDocument();
+      expect(db.productos).toHaveLength(15);
+    });
+
+    it('edita el stock de un producto y lo elimina previa confirmación', async () => {
+      abrirAdminEn('/admin/productos');
+      await esperarCarga();
 
       fireEvent.click(within(filaCon('PlayStation 5 Slim 1TB')).getByTitle('Editar'));
       escribirEn(camposDeVentana()[3], '2');
       fireEvent.click(within(ventana()).getByRole('button', { name: /actualizar cambios/i }));
-      expect(obtenerProductoPorId(1).stock).toBe(2);
+      await waitFor(() => expect(ventana()).toBeNull());
+      expect(actualizarProducto).toHaveBeenCalledWith(1, expect.objectContaining({ stock: 2, categoriaId: 1 }));
+      expect(db.productos.find((p) => p.id === 1).stock).toBe(2);
 
       fireEvent.click(within(filaCon('PlayStation 5 Slim 1TB')).getByTitle('Eliminar'));
       expect(window.confirm).toHaveBeenCalled();
-      expect(screen.queryByText('PlayStation 5 Slim 1TB')).not.toBeInTheDocument();
-      expect(obtenerProductos()).toHaveLength(14);
+      await waitFor(() => expect(screen.queryByText('PlayStation 5 Slim 1TB')).not.toBeInTheDocument());
+      expect(eliminarProducto).toHaveBeenCalledWith(1);
+      expect(db.productos).toHaveLength(14);
     });
 
-    it('muestra el detalle de un producto en modo lectura', () => {
+    it('muestra el mensaje del backend si no se puede eliminar un producto (409)', async () => {
+      vi.mocked(eliminarProducto).mockRejectedValueOnce(
+        errorDelBackend(409, 'No se puede eliminar el producto porque ya fue vendido')
+      );
       abrirAdminEn('/admin/productos');
+      await esperarCarga();
+
+      fireEvent.click(within(filaCon('Catan El Juego')).getByTitle('Eliminar'));
+      expect(await screen.findByText('No se puede eliminar el producto porque ya fue vendido')).toBeInTheDocument();
+      expect(screen.getByText('Catan El Juego')).toBeInTheDocument();
+    });
+
+    it('muestra el detalle de un producto en modo lectura', async () => {
+      abrirAdminEn('/admin/productos');
+      await esperarCarga();
       fireEvent.click(within(filaCon('Silla Gamer Ergonómica Pro')).getByTitle('Ver Detalle'));
 
       expect(within(ventana()).getByText('Detalle de Producto')).toBeInTheDocument();
       expect(within(ventana()).getByText('$129.990')).toBeInTheDocument();
+      expect(within(ventana()).getByText('Sillas')).toBeInTheDocument();
       expect(within(ventana()).queryByRole('button', { name: /actualizar/i })).not.toBeInTheDocument();
     });
   });
 
   describe('Categorías (RF17)', () => {
-    it('crea una categoría nueva y rechaza un nombre repetido', () => {
+    it('crea una categoría nueva y muestra el error del backend si el nombre se repite', async () => {
       abrirAdminEn('/admin/categorias');
+      await esperarCarga();
 
       fireEvent.click(screen.getByRole('button', { name: /nueva categoría/i }));
       escribirEn(camposDeVentana()[0], 'consolas');
       fireEvent.click(within(ventana()).getByRole('button', { name: /crear categoría/i }));
-      expect(screen.getByText('Ya existe una categoría con ese nombre')).toBeInTheDocument();
+      expect(await screen.findByText("Ya existe una categoría con el nombre 'consolas'")).toBeInTheDocument();
 
       escribirEn(camposDeVentana()[0], 'Streaming');
       fireEvent.click(within(ventana()).getByRole('button', { name: /crear categoría/i }));
-      expect(ventana()).toBeNull();
-      expect(screen.getByText('Streaming')).toBeInTheDocument();
-      expect(obtenerCategorias()).toHaveLength(7);
+      await waitFor(() => expect(ventana()).toBeNull());
+      expect(await screen.findByText('Streaming')).toBeInTheDocument();
+      expect(db.categorias).toHaveLength(7);
     });
 
-    it('no elimina categorías con productos y sí elimina las vacías', () => {
-      crearCategoria({ nombre: 'Streaming', descripcion: 'Sin productos todavía' });
+    it('no elimina categorías con productos y sí elimina las vacías', async () => {
+      db.categorias.push({ id: 7, nombre: 'Streaming', descripcion: 'Sin productos todavía', activa: true });
       abrirAdminEn('/admin/categorias');
+      await esperarCarga();
 
       fireEvent.click(within(filaCon('Sillas')).getByTitle('Eliminar'));
       expect(screen.getByText(/no se puede eliminar: tiene 2 producto/i)).toBeInTheDocument();
       expect(window.confirm).not.toHaveBeenCalled();
 
       fireEvent.click(within(filaCon('Streaming')).getByTitle('Eliminar'));
-      expect(screen.queryByText('Streaming')).not.toBeInTheDocument();
-      expect(obtenerCategorias()).toHaveLength(6);
+      await waitFor(() => expect(screen.queryByText('Streaming')).not.toBeInTheDocument());
+      expect(db.categorias).toHaveLength(6);
     });
   });
 
