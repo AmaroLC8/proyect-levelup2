@@ -312,7 +312,7 @@ lleva el token, que está **firmado**: el backend saca el rol de su base de dato
   no los acepta (nadie puede darse más permisos o puntos a sí mismo).
 - Después de guardar llaman a `actualizarUsuarioSesion(respuesta)`, para que la Navbar muestre el nombre nuevo.
 - En `AdminPerfil` el correo ahora es **solo lectura** (va dentro del token; lo cambia otro ADMIN en Usuarios).
-- El historial de compras del cliente sigue saliendo de `data/ordenes.js` hasta la tarea F3.
+- El historial de compras del cliente sale de `GET /boletas/mis-compras` (ver sección 10).
 
 ---
 
@@ -342,19 +342,140 @@ Dónde está cada regla:
 
 ---
 
-## 10. Pendiente (próximas tareas)
+## 10. Compras: carrito → checkout → `POST /boletas` → resultado (tarea F3)
 
-- **Carrito, checkout, dashboard, reportes, órdenes y usuarios** siguen usando `src/data` (el checkout todavía
-  descuenta stock en `data/productos.js`). El historial de Pedro sale vacío en la app real porque las órdenes de
-  ejemplo locales son del `usuarioId` 2 y en el backend Pedro es el id 3 (se arregla en F3).
-- **AdminUsuarios** ya usa los roles en mayúsculas y tiene la opción VENDEDOR, pero sigue siendo CRUD local.
-- **F4**: eliminar `src/data/productos.js` y `src/data/categorias.js` (y sus pruebas). Antes hay que cambiar
-  el import de `obtenerPrecioFinal` en `CartContext.jsx` a `../utils/precios`, y las pruebas de
-  `CartContext.test.jsx`, que todavía usan `obtenerProductoPorId` local, a `PRODUCTOS_PRUEBA`.
+### Archivos
+| Archivo | Qué hace |
+|---|---|
+| `services/boletasService.js` | `crearBoleta` (`POST /boletas`), `listarBoletas` (`GET /boletas`), `obtenerBoleta` (`GET /boletas/{id}`), `obtenerPorNumero` (`GET /boletas/numero/{n}`) y `misCompras` (`GET /boletas/mis-compras`) |
+| `utils/ultimaBoleta.js` | Guarda en localStorage (`levelup_ultima_boleta`) la boleta que respondió el backend al pagar |
+| `pages/Checkout.jsx` | Valida el formulario, envía la boleta y decide a qué página ir |
+| `pages/PagoExitoso.jsx` / `PagoError.jsx` | Muestran la última boleta (`PAGADA` o `RECHAZADA`) |
+| `components/ResumenOrden.jsx` | Cliente, dirección, detalles y totales de una boleta (lo usan los resultados y el panel) |
+| `components/DesgloseTotales.jsx` | Subtotal, descuento, neto, IVA y total |
+| `pages/admin/AdminOrdenes.jsx` / `VerBoletaAdmin.jsx` | Lista y detalle de boletas para ADMIN y VENDEDOR |
+| `pages/Perfil.jsx` | Historial del cliente con `misCompras()` |
+
+### Flujo completo
+```
+1. CARRITO (Carrito.jsx + CartContext)
+   Los productos y sus cantidades viven en el navegador (localStorage "levelup_cart").
+   Subtotal, descuento Duoc (20% si usuario.descuentoDuoc), neto e IVA se calculan aquí: son una ESTIMACIÓN.
+
+2. CHECKOUT (Checkout.jsx)
+   - Con sesión, el formulario se precarga con nombre, apellidos y correo del usuario.
+   - Valida en el navegador: campos obligatorios, nombre (validarNombreCompleto) y correo (esCorreoValido).
+   - Arma el BoletaRequest (sin precios, sin totales y sin usuarioId):
+       { nombre, apellidos, correo, calle, depto, region, comuna, indicaciones,
+         items: [{ productoId: 5, cantidad: 1 }, ...] }
+   - Botón "Procesando pago..." deshabilitado mientras espera.
+
+3. POST /api/v1/boletas  (api.js agrega "Authorization: Bearer <token>" si hay sesión)
+   BoletaService del backend:
+   - Usuario: el del token si es CLIENTE (y su descuento Duoc); visitante si no hay token.
+   - Por cada item: busca el producto (404), revisa el stock (409) y usa el precio de oferta si existe.
+   - subtotal, descuento, total = subtotal - descuento, neto = round(total / 1.19), iva = total - neto.
+   - Pago simulado: correo con "error" → RECHAZADA; si no → PAGADA y descuenta el stock.
+   - Guarda la boleta (también las rechazadas) y responde 201 con la boleta completa.
+
+4. RESPUESTA (de vuelta en Checkout.jsx)
+   ├─ 201 + estado PAGADA    → guardarUltimaBoleta, vaciarCarrito, navigate('/pago-exitoso')
+   ├─ 201 + estado RECHAZADA → guardarUltimaBoleta, el carrito NO se vacía, navigate('/pago-error')
+   └─ error (409 sin stock, 404, 400, backend apagado) → alerta con err.message en el checkout,
+                                                          no cambia de página y el botón se reactiva
+
+5. RESULTADO
+   - /pago-exitoso: número de orden, fecha, ResumenOrden con los montos del backend, imprimir boleta.
+   - /pago-error: "Monto pendiente" y el botón "Volver a realizar el pago" → /checkout con
+     state { reintentar: true }: el formulario se llena con nombreCliente, correoCliente, calle...
+     de la boleta rechazada (para corregir el correo y volver a pagar).
+```
+
+### ¿Por qué el frontend no envía precios?
+Si el precio viniera del navegador, cualquiera podría editar el JSON (con las herramientas del navegador) y
+comprar más barato. El backend toma el precio de la base de datos y guarda `precioUnitario` en cada detalle,
+así la boleta no cambia si después se edita el producto.
+
+### Estimación vs. monto final
+El carrito y el checkout muestran una estimación calculada en el frontend (`CartContext` + `desglosarIva`).
+El **monto final** es el de la boleta: `ResumenOrden` le pasa a `DesgloseTotales` el `neto` y el `iva` que
+calculó el backend, y `DesgloseTotales` los muestra **sin recalcularlos**. Solo cuando no recibe `neto` e `iva`
+(carrito y checkout) los calcula con `desglosarIva`. Pueden diferir si un precio cambió después de agregar el
+producto al carrito: se cobra el precio vigente.
+
+### Formato de la boleta que responde el backend
+```json
+{ "id": 1, "numeroOrden": "20261112-001", "fecha": "2026-11-12T09:30:00", "estado": "PAGADA",
+  "usuario": { "id": 3, "correo": "pedro@duocuc.cl", ... },        // null si compró un visitante
+  "nombreCliente": "Pedro", "apellidosCliente": "Hacker", "correoCliente": "pedro@duocuc.cl",
+  "calle": "...", "depto": "...", "region": "...", "comuna": "...", "indicaciones": "...",
+  "detalles": [ { "id": 1, "producto": { "id": 3, "nombre": "Catan El Juego", ... },
+                  "cantidad": 1, "precioUnitario": 27990, "subtotal": 27990 } ],
+  "subtotal": 127970, "descuento": 25594, "neto": 86030, "iva": 16346, "total": 102376 }
+```
+Diferencias con las órdenes locales antiguas (`data/ordenes.js`):
+
+| Antes (local) | Ahora (backend) |
+|---|---|
+| `estado: "pagada"` / `"rechazada"` | `estado: "PAGADA"` / `"RECHAZADA"` (enum `EstadoBoleta`) |
+| `cliente: { nombre, apellidos, correo, calle, ... }` | `nombreCliente`, `apellidosCliente`, `correoCliente` y la dirección sueltos en la boleta |
+| `items: [{ id, nombre, precio, cantidad }]` | `detalles: [{ producto: {...}, cantidad, precioUnitario, subtotal }]` |
+| `usuarioId` | `usuario` (objeto o `null`) |
+| neto e IVA se calculaban al mostrar | `neto` e `iva` vienen guardados en la boleta |
+
+`EstadoOrden` acepta los dos formatos de estado mientras el Dashboard y AdminUsuarios sigan usando las órdenes locales.
+
+### Panel (ADMIN y VENDEDOR)
+- `AdminOrdenes`: `listarBoletas()` con carga y error. El backend ya las entrega de la más reciente a la más antigua.
+  El filtro compara `o.estado === 'PAGADA'` o `'RECHAZADA'`.
+- `VerBoletaAdmin`: `obtenerBoleta(id)`; un 404 muestra "Orden no encontrada". Usa `key={id}` como DetalleProducto.
+  Indica si la compró un cliente registrado (`usuario.correo`) o un visitante (`usuario === null`).
+
+### Historial del cliente (`Perfil.jsx`)
+`misCompras()` → `GET /boletas/mis-compras`. El backend saca al usuario del **token**, así un cliente no puede pedir
+las compras de otro. El historial tiene su propia carga y error: si falla, los datos del perfil se siguen viendo.
+
+### Pruebas: `src/test/boletasSimuladas.js`
+`simularBoletas()` hace que `boletasService` (con `vi.mock`) responda como `BoletaService`: precio de oferta, 20%
+para Pedro (según el token), neto/IVA, RECHAZADA si el correo tiene "error", 409 si la cantidad supera el stock y
+descuento de stock solo en las pagadas. Trae 2 boletas de ejemplo (una PAGADA de Pedro y una RECHAZADA de un visitante).
 
 ---
 
-## 11. Ejemplos de modificaciones que podría pedir el profesor
+## 11. Pendiente (próximas tareas)
+
+- **Dashboard, reportes y el historial de AdminUsuarios** siguen usando `data/ordenes.js` (órdenes locales con
+  estado en minúsculas). Los enlaces del Dashboard a cada orden usan ids locales (1 y 2), pero `/admin/ordenes/:id`
+  ahora busca en el backend: pueden abrir otra boleta o "Orden no encontrada" hasta que el Dashboard use `/reportes`.
+- **AdminUsuarios** ya usa los roles en mayúsculas y tiene la opción VENDEDOR, pero sigue siendo CRUD local.
+- **F4**: eliminar `src/data/productos.js`, `src/data/categorias.js` y `src/data/ordenes.js` (y sus pruebas). Antes hay
+  que cambiar el import de `obtenerPrecioFinal` en `CartContext.jsx` a `../utils/precios`, las pruebas de
+  `CartContext.test.jsx` (usan `obtenerProductoPorId` local) a `PRODUCTOS_PRUEBA`, y quitar las minúsculas de `EstadoOrden`.
+
+---
+
+## 12. Ejemplos de modificaciones que podría pedir el profesor
+
+### Mostrar un dato más de la boleta (ej: la región en la lista de órdenes)
+El JSON de `GET /boletas` ya trae `region`. En `AdminOrdenes.jsx`: agregar `<th>Región</th>` en el encabezado y
+`<td>{ord.region}</td>` en cada fila (y subir `colSpan="7"` a `8` en la fila "No hay órdenes"). No se toca el service.
+
+### Buscar una boleta por su número en el panel
+`obtenerPorNumero` ya existe en `boletasService.js`. En `AdminOrdenes.jsx`: un `<input>` y un botón que llame a
+`obtenerPorNumero(texto).then((boleta) => navigate(`/admin/ordenes/${boleta.id}`)).catch((err) => setError(err.message))`
+(un número que no existe responde 404 con su mensaje).
+
+### Cambiar la regla del pago rechazado (ej: también si el total supera $2.000.000)
+Es del backend: `BoletaService.simularPago`. El frontend no cambia, porque solo lee `boleta.estado`.
+
+### Agregar costo de despacho
+1. Backend: campo `despacho` en `Boleta` y sumarlo al `total` en `BoletaService.crear` (guía del backend).
+2. Frontend: en `ResumenOrden.jsx`, una fila más con `formatearDinero(orden.despacho)`. Para que la estimación del carrito
+   coincida, sumarlo también en `CartContext` (`totalMonto = subtotal - descuento + DESPACHO`).
+
+### Que el ADMIN pueda registrar una venta a nombre de un cliente
+El backend ya lo permite: con token de ADMIN respeta `usuarioId`. En `Checkout.jsx`, si `esAdmin`, mostrar un campo
+"Id del cliente" y agregar `usuarioId: Number(form.usuarioId)` al objeto `datosBoleta`.
 
 ### Cambiar qué ve un rol (ej: que el VENDEDOR también vea Categorías)
 1. `App.jsx`: sacar `<Route path="categorias" ...>` de la `RutaProtegida` solo ADMIN y ponerla junto a `productos`.

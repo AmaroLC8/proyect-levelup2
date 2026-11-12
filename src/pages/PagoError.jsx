@@ -1,12 +1,14 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { obtenerUltimaOrden } from '../data/ordenes';
+import { obtenerUltimaBoleta } from '../utils/ultimaBoleta';
 import ResumenOrden from '../components/ResumenOrden';
 
+// Muestra la boleta RECHAZADA que respondió el backend en POST /boletas (la guarda Checkout.jsx).
+// El backend también guarda las boletas rechazadas, así queda registro del intento.
 export default function PagoError() {
-  const orden = obtenerUltimaOrden();
+  const orden = obtenerUltimaBoleta();
 
-  if (!orden || orden.estado !== 'rechazada') {
+  if (!orden || orden.estado !== 'RECHAZADA') {
     return (
       <div className="container my-5 text-center">
         <h3 className="text-secondary">No hay un pago pendiente para mostrar.</h3>
@@ -27,6 +29,10 @@ export default function PagoError() {
         </div>
 
         <div className="card-body p-4">
+          <p className="text-secondary small text-end mb-3">
+            Fecha: {new Date(orden.fecha).toLocaleString('es-CL')}
+          </p>
+
           <div className="text-center">
             <p className="text-secondary mb-4">
               Ocurrió un problema con el medio de pago. Tus productos siguen guardados en el carrito.

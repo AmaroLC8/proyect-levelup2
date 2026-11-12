@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
-import { crearOrden, obtenerUltimaOrden } from '../data/ordenes';
-import { descontarStock } from '../data/productos';
+import { crearBoleta } from '../services/boletasService';
+import { guardarUltimaBoleta, obtenerUltimaBoleta } from '../utils/ultimaBoleta';
 import { obtenerRegiones, obtenerComunas } from '../data/regiones';
 import { esCorreoValido, validarNombreCompleto } from '../utils/validaciones';
 import { formatearDinero } from '../utils/formato';
@@ -11,12 +11,22 @@ import DesgloseTotales from '../components/DesgloseTotales';
 
 const REGION_POR_DEFECTO = 'Región Metropolitana de Santiago';
 
-// Datos iniciales del formulario: los de la orden rechazada si se reintenta el pago,
+// Datos iniciales del formulario: los de la boleta rechazada si se reintenta el pago,
 // los del usuario si inició sesión (RF11), o vacíos para un visitante
 const obtenerDatosIniciales = (usuario, reintentar) => {
-  const ultimaOrden = obtenerUltimaOrden();
-  if (reintentar && ultimaOrden?.estado === 'rechazada') {
-    return { ...ultimaOrden.cliente };
+  const ultimaBoleta = obtenerUltimaBoleta();
+  if (reintentar && ultimaBoleta?.estado === 'RECHAZADA') {
+    // La boleta del backend guarda los datos del cliente con el sufijo "Cliente"
+    return {
+      nombre: ultimaBoleta.nombreCliente,
+      apellidos: ultimaBoleta.apellidosCliente,
+      correo: ultimaBoleta.correoCliente,
+      calle: ultimaBoleta.calle,
+      depto: ultimaBoleta.depto ?? '',
+      region: ultimaBoleta.region,
+      comuna: ultimaBoleta.comuna,
+      indicaciones: ultimaBoleta.indicaciones ?? '',
+    };
   }
   return {
     nombre: usuario?.nombre ?? '',
@@ -42,6 +52,7 @@ export default function Checkout() {
   );
 
   const [error, setError] = useState('');
+  const [procesando, setProcesando] = useState(false); // esperando la respuesta de POST /boletas
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -53,7 +64,7 @@ export default function Checkout() {
     setFormData({ ...formData, region, comuna: obtenerComunas(region)[0] });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     // Validación de campos requeridos
@@ -75,25 +86,40 @@ export default function Checkout() {
 
     setError('');
 
-    // Si el correo contiene "error" (ej: error@test.com) simulamos un pago rechazado
-    const pagoRechazado = formData.correo.toLowerCase().includes('error');
+    // Formato BoletaRequest del backend. No se envían precios ni totales: el backend los calcula
+    // con los precios de la base de datos. Tampoco se envía usuarioId: si hay sesión, el backend
+    // toma al usuario del token (y aplica su descuento Duoc).
+    const datosBoleta = {
+      nombre: formData.nombre.trim(),
+      apellidos: formData.apellidos.trim(),
+      correo: formData.correo.trim(),
+      calle: formData.calle.trim(),
+      depto: formData.depto.trim(),
+      region: formData.region,
+      comuna: formData.comuna,
+      indicaciones: formData.indicaciones.trim(),
+      items: carrito.map((item) => ({ productoId: item.id, cantidad: item.cantidad })),
+    };
 
-    crearOrden({
-      estado: pagoRechazado ? 'rechazada' : 'pagada',
-      usuarioId: usuario?.id ?? null,
-      cliente: formData,
-      items: carrito.map(({ id, nombre, precio, cantidad, imagen }) => ({ id, nombre, precio, cantidad, imagen })),
-      subtotal,
-      descuento,
-      total: totalMonto,
-    });
+    setProcesando(true);
+    try {
+      // POST /boletas. El pago es simulado en el backend: si el correo contiene "error"
+      // (ej: error@test.com) la boleta vuelve RECHAZADA; si no, PAGADA y se descuenta el stock.
+      const boleta = await crearBoleta(datosBoleta);
+      guardarUltimaBoleta(boleta); // para /pago-exitoso, /pago-error y "Volver a realizar el pago"
 
-    if (pagoRechazado) {
-      navigate('/pago-error');
-    } else {
-      descontarStock(carrito);
-      vaciarCarrito();
-      navigate('/pago-exitoso');
+      if (boleta.estado === 'PAGADA') {
+        vaciarCarrito();
+        navigate('/pago-exitoso');
+      } else {
+        // Rechazada: el carrito se mantiene para poder reintentar
+        navigate('/pago-error');
+      }
+    } catch (err) {
+      // El backend no creó la boleta (ej: 409 stock insuficiente, 404 producto eliminado,
+      // o el servidor no responde): se muestra el mensaje aquí, sin cambiar de página
+      setError(err.message);
+      setProcesando(false);
     }
   };
 
@@ -159,7 +185,7 @@ export default function Checkout() {
             </div>
           )}
 
-          {error && <div className="alert alert-danger py-2">{error}</div>}
+          {error && <div className="alert alert-danger py-2" role="alert">{error}</div>}
 
           <form onSubmit={handleSubmit}>
             {/* Información del Cliente */}
@@ -269,9 +295,17 @@ export default function Checkout() {
             </div>
 
             <div className="d-grid">
-              <button type="submit" className="btn btn-success btn-lg fw-bold py-3">
-                <i className="bi bi-shield-check me-2"></i>Pagar ahora {formatearDinero(totalMonto)}
+              {/* Deshabilitado mientras se espera al backend, para no crear dos boletas */}
+              <button type="submit" className="btn btn-success btn-lg fw-bold py-3" disabled={procesando}>
+                {procesando ? (
+                  <><span className="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Procesando pago...</>
+                ) : (
+                  <><i className="bi bi-shield-check me-2"></i>Pagar ahora {formatearDinero(totalMonto)}</>
+                )}
               </button>
+              <small className="text-secondary text-center mt-2">
+                El monto final lo calcula el servidor con los precios vigentes al momento de pagar.
+              </small>
             </div>
           </form>
         </div>

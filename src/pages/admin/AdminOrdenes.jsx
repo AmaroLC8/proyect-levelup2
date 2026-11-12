@@ -1,13 +1,26 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { obtenerOrdenes, ordenarPorFechaDesc } from '../../data/ordenes';
+import { listarBoletas } from '../../services/boletasService';
 import { formatearDinero, formatearFecha } from '../../utils/formato';
 import EstadoOrden from '../../components/EstadoOrden';
+import EstadoCarga from '../../components/EstadoCarga';
 
+// Lista de boletas para ADMIN y VENDEDOR (GET /boletas). El backend ya las entrega
+// ordenadas de la más reciente a la más antigua.
 export default function AdminOrdenes() {
-  const [ordenes] = useState(() => ordenarPorFechaDesc(obtenerOrdenes()));
+  const [ordenes, setOrdenes] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState('');
   const [filtroEstado, setFiltroEstado] = useState('todas');
 
+  useEffect(() => {
+    listarBoletas()
+      .then((datos) => setOrdenes(datos))
+      .catch((err) => setError(err.message))
+      .finally(() => setCargando(false));
+  }, []);
+
+  // El estado viene del backend en mayúsculas: PAGADA o RECHAZADA
   const ordenesFiltradas = ordenes.filter(
     (o) => filtroEstado === 'todas' || o.estado === filtroEstado
   );
@@ -42,59 +55,64 @@ export default function AdminOrdenes() {
               onChange={(e) => setFiltroEstado(e.target.value)}
             >
               <option value="todas">Todas las órdenes</option>
-              <option value="pagada">Pagadas</option>
-              <option value="rechazada">Rechazadas</option>
+              <option value="PAGADA">Pagadas</option>
+              <option value="RECHAZADA">Rechazadas</option>
             </select>
           </div>
         </div>
       </div>
 
-      {/* Tabla de Órdenes */}
-      <div className="card bg-dark border-secondary shadow-sm">
-        <div className="table-responsive">
-          <table className="table table-dark table-hover align-middle mb-0">
-            <thead>
-              <tr className="border-bottom border-secondary text-info">
-                <th>N° Orden</th>
-                <th>Fecha</th>
-                <th>Cliente</th>
-                <th>Correo</th>
-                <th>Total</th>
-                <th>Estado</th>
-                <th className="text-center">Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {ordenesFiltradas.length === 0 ? (
-                <tr>
-                  <td colSpan="7" className="text-center py-4 text-secondary">
-                    No hay órdenes registradas con este criterio.
-                  </td>
+      <EstadoCarga cargando={cargando} error={error} />
+
+      {/* Tabla de Órdenes (cuando ya terminó la carga sin errores) */}
+      {!cargando && !error && (
+        <div className="card bg-dark border-secondary shadow-sm">
+          <div className="table-responsive">
+            <table className="table table-dark table-hover align-middle mb-0">
+              <thead>
+                <tr className="border-bottom border-secondary text-info">
+                  <th>N° Orden</th>
+                  <th>Fecha</th>
+                  <th>Cliente</th>
+                  <th>Correo</th>
+                  <th>Total</th>
+                  <th>Estado</th>
+                  <th className="text-center">Acciones</th>
                 </tr>
-              ) : (
-                ordenesFiltradas.map((ord) => (
-                  <tr key={ord.id}>
-                    <td className="fw-bold text-info">#{ord.numeroOrden}</td>
-                    <td>{formatearFecha(ord.fecha)}</td>
-                    <td>{ord.cliente.nombre} {ord.cliente.apellidos}</td>
-                    <td className="small text-secondary">{ord.cliente.correo}</td>
-                    <td className="fw-bold text-success">{formatearDinero(ord.total)}</td>
-                    <td><EstadoOrden estado={ord.estado} /></td>
-                    <td className="text-center">
-                      <Link
-                        to={`/admin/ordenes/${ord.id}`}
-                        className="btn btn-sm btn-outline-info d-inline-flex align-items-center gap-1"
-                      >
-                        <i className="bi bi-eye"></i> Ver Boleta
-                      </Link>
+              </thead>
+              <tbody>
+                {ordenesFiltradas.length === 0 ? (
+                  <tr>
+                    <td colSpan="7" className="text-center py-4 text-secondary">
+                      No hay órdenes registradas con este criterio.
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ) : (
+                  ordenesFiltradas.map((ord) => (
+                    <tr key={ord.id}>
+                      <td className="fw-bold text-info">#{ord.numeroOrden}</td>
+                      <td>{formatearFecha(ord.fecha)}</td>
+                      {/* Datos del formulario de checkout guardados en la boleta (sirven también para visitantes) */}
+                      <td>{ord.nombreCliente} {ord.apellidosCliente}</td>
+                      <td className="small text-secondary">{ord.correoCliente}</td>
+                      <td className="fw-bold text-success">{formatearDinero(ord.total)}</td>
+                      <td><EstadoOrden estado={ord.estado} /></td>
+                      <td className="text-center">
+                        <Link
+                          to={`/admin/ordenes/${ord.id}`}
+                          className="btn btn-sm btn-outline-info d-inline-flex align-items-center gap-1"
+                        >
+                          <i className="bi bi-eye"></i> Ver Boleta
+                        </Link>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

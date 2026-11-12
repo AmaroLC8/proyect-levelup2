@@ -6,11 +6,15 @@ import { obtenerUsuarios } from '../data/usuarios';
 import { crearOrden } from '../data/ordenes';
 import { crearProducto, actualizarProducto, eliminarProducto } from '../services/productosService';
 import { actualizarPerfil } from '../services/authService';
+import { listarBoletas, obtenerBoleta } from '../services/boletasService';
 import { simularBackend, simularBackendCaido, errorDelBackend } from './backendSimulado';
-import { simularAuth, simularSesion, ADMIN } from './sesionSimulada';
+import { simularAuth, simularSesion, ADMIN, VENDEDOR } from './sesionSimulada';
+import { simularBoletas } from './boletasSimuladas';
 
-// La sesión (login con JWT, /auth/me y /auth/perfil) también se simula
+// La sesión (login con JWT, /auth/me y /auth/perfil) y las boletas también se simulan.
+// El dashboard y los reportes todavía usan las órdenes locales de data/ordenes.js (tarea F4).
 vi.mock('../services/authService');
+vi.mock('../services/boletasService');
 
 // Productos y categorías vienen del backend: se simulan los services (no se llama al backend real).
 // simularBackend() (en beforeEach) les da respuestas con los datos de backendSimulado.js
@@ -43,6 +47,7 @@ describe('Pruebas del panel de administración', () => {
     vi.clearAllMocks(); // borra las llamadas registradas en la prueba anterior (ej: crearProducto)
     db = simularBackend();
     authDb = simularAuth();
+    simularBoletas();
     // Simula que el administrador acepta los mensajes de confirmación al eliminar
     vi.spyOn(window, 'confirm').mockReturnValue(true);
   });
@@ -283,24 +288,69 @@ describe('Pruebas del panel de administración', () => {
       total: 499990,
     };
 
-    it('filtra las órdenes por estado y abre la boleta con los datos del cliente', () => {
-      crearOrden(ordenRechazada);
+    it('lista las boletas del backend con estado, fecha, cliente y total', async () => {
       abrirAdminEn('/admin/ordenes');
-      expect(screen.getByText('Total órdenes: 3')).toBeInTheDocument();
-      expect(screen.getByText('camila.rojas@gmail.com')).toBeInTheDocument();
 
-      fireEvent.change(screen.getByLabelText(/filtrar por estado/i), { target: { value: 'rechazada' } });
+      expect(await screen.findByText('Total órdenes: 2')).toBeInTheDocument();
+      expect(listarBoletas).toHaveBeenCalled();
+      const fila = filaCon('#20261112-001');
+      expect(within(fila).getByText('Pedro Hacker')).toBeInTheDocument();
+      expect(within(fila).getByText('pedro@duocuc.cl')).toBeInTheDocument();
+      expect(within(fila).getByText('$102.376')).toBeInTheDocument();
+      expect(within(fila).getByText('Pagada')).toBeInTheDocument();
+      expect(within(filaCon('#20261112-002')).getByText('Rechazada')).toBeInTheDocument();
+    });
+
+    it('filtra las órdenes por estado y abre la boleta con los datos del cliente', async () => {
+      abrirAdminEn('/admin/ordenes');
+      await esperarCarga();
+
+      fireEvent.change(screen.getByLabelText(/filtrar por estado/i), { target: { value: 'RECHAZADA' } });
       expect(screen.getAllByRole('link', { name: /ver boleta/i })).toHaveLength(1);
 
       fireEvent.click(screen.getByRole('link', { name: /ver boleta/i }));
-      expect(screen.getByText('BOLETA ELECTRÓNICA')).toBeInTheDocument();
+      expect(await screen.findByText('BOLETA ELECTRÓNICA')).toBeInTheDocument();
+      expect(obtenerBoleta).toHaveBeenCalledWith('2');
       expect(screen.getByText(/Av\. Siempre Viva 742, Talca, Maule/)).toBeInTheDocument();
+      expect(screen.getByText('Compra como visitante')).toBeInTheDocument();
       expect(screen.getByText('Monto no pagado:')).toBeInTheDocument();
     });
 
-    it('avisa cuando la boleta solicitada no existe', () => {
+    it('la boleta muestra cada detalle y el neto e IVA que calculó el backend', async () => {
+      abrirAdminEn('/admin/ordenes/1');
+
+      expect(await screen.findByText('N° 20261112-001')).toBeInTheDocument();
+      expect(screen.getByText('Cliente registrado: pedro@duocuc.cl')).toBeInTheDocument();
+      const filaAudifonos = filaCon('Audífonos Gamer 7.1 Surround');
+      expect(within(filaAudifonos).getByText('$49.990')).toBeInTheDocument(); // precio unitario
+      expect(within(filaAudifonos).getByText('2')).toBeInTheDocument(); // cantidad
+      expect(within(filaAudifonos).getByText('$99.980')).toBeInTheDocument(); // subtotal
+      expect(screen.getByText('-$25.594')).toBeInTheDocument();
+      expect(screen.getByText('Neto:').nextSibling).toHaveTextContent('$86.030');
+      expect(screen.getByText('IVA (19%):').nextSibling).toHaveTextContent('$16.346');
+      expect(screen.getByText('Total pagado:').nextSibling).toHaveTextContent('$102.376');
+    });
+
+    it('avisa cuando la boleta solicitada no existe (404)', async () => {
       abrirAdminEn('/admin/ordenes/123');
-      expect(screen.getByText('Orden no encontrada')).toBeInTheDocument();
+      expect(await screen.findByText('Orden no encontrada')).toBeInTheDocument();
+    });
+
+    it('si el backend no responde, la lista de órdenes muestra el error', async () => {
+      vi.mocked(listarBoletas).mockRejectedValueOnce(new Error('No se pudo conectar con el servidor.'));
+      abrirAdminEn('/admin/ordenes');
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo conectar con el servidor.');
+      expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    });
+
+    it('el VENDEDOR también ve la lista de órdenes y el detalle de la boleta', async () => {
+      simularSesion(VENDEDOR);
+      window.history.pushState({}, '', '/admin/ordenes');
+      render(<App />);
+
+      fireEvent.click((await screen.findAllByRole('link', { name: /ver boleta/i }))[0]);
+      expect(await screen.findByText('BOLETA ELECTRÓNICA')).toBeInTheDocument();
     });
 
     it('los reportes suman solo las ventas pagadas y agrupan por categoría', () => {

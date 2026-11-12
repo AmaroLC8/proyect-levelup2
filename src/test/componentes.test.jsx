@@ -38,18 +38,21 @@ const renderConApp = (ui, { ruta = '/' } = {}) =>
     </AuthProvider>
   );
 
+// Boleta con el formato que responde el backend (POST /boletas, GET /boletas/{id})
 const ordenDePrueba = {
+  id: 3,
   numeroOrden: '20261021-003',
-  cliente: {
-    nombre: 'Ana', apellidos: 'Soto', correo: 'ana@duocuc.cl',
-    calle: 'Av. Siempre Viva 742', depto: 'Depto 12', region: 'Maule', comuna: 'Talca', indicaciones: 'Dejar en conserjería',
-  },
-  items: [
-    { id: 1, nombre: 'PlayStation 5 Slim 1TB', precio: 499990, cantidad: 1 },
-    { id: 5, nombre: 'Mouse Gamer 16000 DPI Sensor Óptico', precio: 29990, cantidad: 2 },
+  estado: 'PAGADA',
+  nombreCliente: 'Ana', apellidosCliente: 'Soto', correoCliente: 'ana@duocuc.cl',
+  calle: 'Av. Siempre Viva 742', depto: 'Depto 12', region: 'Maule', comuna: 'Talca', indicaciones: 'Dejar en conserjería',
+  detalles: [
+    { id: 1, producto: obtenerProductoPorId(1), cantidad: 1, precioUnitario: 499990, subtotal: 499990 },
+    { id: 2, producto: obtenerProductoPorId(5), cantidad: 2, precioUnitario: 29990, subtotal: 59980 },
   ],
   subtotal: 559970,
   descuento: 111994,
+  neto: 376450,
+  iva: 71526,
   total: 447976,
 };
 
@@ -86,6 +89,9 @@ describe('Pruebas de componentes reutilizables', () => {
       // encabezado + 2 productos + subtotal + descuento + neto + IVA + total
       expect(filas).toHaveLength(8);
       expect(screen.getByText('Mouse Gamer 16000 DPI Sensor Óptico')).toBeInTheDocument();
+      // Subtotal del detalle tal como lo calculó el backend
+      expect(screen.getByText('$59.980')).toBeInTheDocument();
+      expect(screen.getByText('ana@duocuc.cl')).toBeInTheDocument();
       expect(screen.getByText(/Av\. Siempre Viva 742 \(Depto 12\), Talca, Maule/)).toBeInTheDocument();
       expect(screen.getByText('"Dejar en conserjería"')).toBeInTheDocument();
     });
@@ -100,9 +106,9 @@ describe('Pruebas de componentes reutilizables', () => {
       expect(screen.getByText('Monto pendiente:')).toBeInTheDocument();
     });
 
-    it('desglosa el total en neto e IVA del 19%', () => {
+    it('desglosa el total en el neto y el IVA que envía el backend', () => {
       render(<ResumenOrden orden={ordenDePrueba} />);
-      // Total $447.976 con IVA incluido = neto $376.450 + IVA $71.526
+      // Total $447.976 con IVA incluido = neto $376.450 + IVA $71.526 (campos neto e iva de la boleta)
       expect(screen.getByText('Neto:').nextSibling).toHaveTextContent('$376.450');
       expect(screen.getByText('IVA (19%):').nextSibling).toHaveTextContent('$71.526');
     });
@@ -128,6 +134,14 @@ describe('Pruebas de componentes reutilizables', () => {
       expect(screen.getByText('IVA (19%):').nextSibling).toHaveTextContent('$1.900');
       expect(screen.getByText('Total a pagar:')).toBeInTheDocument();
     });
+
+    it('si recibe neto e iva (boleta del backend) los muestra sin volver a calcularlos', () => {
+      // Valores elegidos a propósito distintos de round(11900 / 1.19) para comprobar que no se recalculan
+      enTabla(<DesgloseTotales subtotal={11900} total={11900} neto={9999} iva={1901} />);
+
+      expect(screen.getByText('Neto:').nextSibling).toHaveTextContent('$9.999');
+      expect(screen.getByText('IVA (19%):').nextSibling).toHaveTextContent('$1.901');
+    });
   });
 
   describe('EstadoOrden', () => {
@@ -137,6 +151,14 @@ describe('Pruebas de componentes reutilizables', () => {
 
       rerender(<EstadoOrden estado="rechazada" />);
       expect(screen.getByText('Rechazada')).toHaveClass('badge', 'bg-danger');
+    });
+
+    it('entiende los estados en mayúsculas que envía el backend (PAGADA y RECHAZADA)', () => {
+      const { rerender } = render(<EstadoOrden estado="PAGADA" />);
+      expect(screen.getByText('Pagada')).toHaveClass('bg-success');
+
+      rerender(<EstadoOrden estado="RECHAZADA" />);
+      expect(screen.getByText('Rechazada')).toHaveClass('bg-danger');
     });
 
     it('muestra un estado desconocido en gris sin romper la vista', () => {

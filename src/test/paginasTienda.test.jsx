@@ -2,16 +2,18 @@ import React from 'react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 import App from '../App';
-import { obtenerOrdenes, crearOrden } from '../data/ordenes';
 import { login, actualizarPerfil } from '../services/authService';
+import { crearBoleta, misCompras } from '../services/boletasService';
 import { simularBackend, simularBackendCaido } from './backendSimulado';
 import { simularAuth, simularSesion, PEDRO } from './sesionSimulada';
+import { simularBoletas } from './boletasSimuladas';
 
 // Los services se reemplazan por funciones simuladas: las pruebas no llaman al backend real.
-// simularBackend() y simularAuth() (en beforeEach) les dan respuestas con los datos de prueba
+// simularBackend(), simularAuth() y simularBoletas() (en beforeEach) les dan respuestas con los datos de prueba
 vi.mock('../services/productosService');
 vi.mock('../services/categoriasService');
 vi.mock('../services/authService');
+vi.mock('../services/boletasService');
 
 // Abre la aplicación completa en la ruta indicada, como lo haría el usuario
 const abrirEn = (ruta) => {
@@ -31,13 +33,15 @@ const esperarCarga = () =>
   waitFor(() => expect(screen.queryByText('Cargando...')).not.toBeInTheDocument());
 
 describe('Pruebas de las vistas de la tienda', () => {
-  let db; // "base de datos" del backend simulado
+  let db; // "base de datos" del backend simulado (productos y categorías)
+  let boletas; // boletas y stock del backend simulado
 
   beforeEach(() => {
     localStorage.clear();
     vi.clearAllMocks(); // borra las llamadas registradas en la prueba anterior (ej: login)
     db = simularBackend();
     simularAuth();
+    boletas = simularBoletas();
   });
 
   describe('Home y Catálogo', () => {
@@ -320,7 +324,7 @@ describe('Pruebas de las vistas de la tienda', () => {
       expect(screen.getByText('Ingresa un correo electrónico válido')).toBeInTheDocument();
     });
 
-    it('una compra pagada guarda la orden y vacía el carrito (RF12)', async () => {
+    it('una compra PAGADA envía la boleta al backend, vacía el carrito y muestra el detalle (RF12)', async () => {
       abrirEn('/producto/5');
       fireEvent.click(await screen.findByRole('button', { name: /añadir al carrito/i }));
       fireEvent.click(screen.getByRole('link', { name: /carrito/i }));
@@ -329,27 +333,81 @@ describe('Pruebas de las vistas de la tienda', () => {
       llenarCheckout('ana@gmail.com');
       fireEvent.click(screen.getByRole('button', { name: /pagar ahora/i }));
 
+      expect(await screen.findByText('¡Se ha realizado la compra con éxito!')).toBeInTheDocument();
       expect(rutaActual()).toBe('/pago-exitoso');
-      expect(screen.getByText('¡Se ha realizado la compra con éxito!')).toBeInTheDocument();
-      expect(obtenerOrdenes().at(-1).estado).toBe('pagada');
-      // El descuento de stock se probará cuando el checkout use el backend (tarea de boletas):
-      // hoy Checkout todavía lo descuenta en data/productos.js
+      // Formato BoletaRequest: datos del cliente, dirección e items { productoId, cantidad }, sin precios
+      expect(crearBoleta).toHaveBeenCalledWith({
+        nombre: 'Ana', apellidos: 'Soto', correo: 'ana@gmail.com',
+        calle: 'Av. Siempre Viva 742', depto: '', region: 'Región Metropolitana de Santiago',
+        comuna: expect.any(String), indicaciones: '',
+        items: [{ productoId: 5, cantidad: 1 }],
+      });
+      // La página muestra la boleta del backend: número, producto y montos calculados por el servidor
+      expect(screen.getByText(`Orden #${boletas.boletas[0].numeroOrden}`)).toBeInTheDocument();
+      expect(screen.getByText('Mouse Gamer 16000 DPI Sensor Óptico')).toBeInTheDocument();
+      expect(screen.getByText('Neto:').nextSibling).toHaveTextContent('$25.202');
+      expect(screen.getByText('IVA (19%):').nextSibling).toHaveTextContent('$4.788');
+      // El stock lo descontó el backend y el carrito quedó vacío
+      expect(boletas.productos.find((p) => p.id === 5).stock).toBe(1);
       expect(screen.getByRole('link', { name: /carrito/i })).toHaveTextContent('Carrito $0');
     });
 
-    it('un pago rechazado mantiene el carrito y al reintentar recupera los datos', () => {
+    it('con sesión de cliente precarga sus datos y el backend aplica su descuento Duoc', async () => {
+      simularSesion(PEDRO);
+      localStorage.setItem('levelup_cart', JSON.stringify([{ id: 5, nombre: 'Mouse Gamer', precio: 29990, cantidad: 1, stock: 2 }]));
+      abrirEn('/checkout');
+
+      expect(campo('nombre')).toHaveValue('Pedro');
+      expect(campo('correo')).toHaveValue('pedro@duocuc.cl');
+      escribir('calle', 'Los Crisantemos 123');
+      fireEvent.click(screen.getByRole('button', { name: /pagar ahora/i }));
+
+      expect(await screen.findByText('¡Se ha realizado la compra con éxito!')).toBeInTheDocument();
+      // 29.990 - 20% = 23.992: el total que se muestra es el que calculó el backend
+      expect(screen.getByText('Total pagado:').nextSibling).toHaveTextContent('$23.992');
+    });
+
+    it('mientras espera al backend el botón muestra "Procesando pago..." y queda deshabilitado', () => {
+      vi.mocked(crearBoleta).mockImplementationOnce(() => new Promise(() => {})); // nunca responde
+      localStorage.setItem('levelup_cart', JSON.stringify([{ id: 5, nombre: 'Mouse Gamer', precio: 29990, cantidad: 1 }]));
+      abrirEn('/checkout');
+      llenarCheckout('ana@gmail.com');
+      fireEvent.click(screen.getByRole('button', { name: /pagar ahora/i }));
+
+      expect(screen.getByRole('button', { name: /procesando pago/i })).toBeDisabled();
+    });
+
+    it('un pago RECHAZADO mantiene el carrito y al reintentar recupera los datos', async () => {
       localStorage.setItem('levelup_cart', JSON.stringify([{ id: 5, nombre: 'Mouse Gamer', precio: 29990, cantidad: 1 }]));
       abrirEn('/checkout');
       llenarCheckout('error@test.com');
       fireEvent.click(screen.getByRole('button', { name: /pagar ahora/i }));
 
+      expect(await screen.findByText('No se pudo realizar el pago')).toBeInTheDocument();
       expect(rutaActual()).toBe('/pago-error');
-      expect(screen.getByText('No se pudo realizar el pago')).toBeInTheDocument();
       expect(screen.getByText('Monto pendiente:')).toBeInTheDocument();
+      // El carrito no se vació y el stock no cambió
+      expect(screen.getByRole('link', { name: /carrito/i })).toHaveTextContent('Carrito $29.990');
+      expect(boletas.productos.find((p) => p.id === 5).stock).toBe(2);
 
       fireEvent.click(screen.getByRole('link', { name: /volver a realizar el pago/i }));
       expect(campo('correo')).toHaveValue('error@test.com');
       expect(campo('calle')).toHaveValue('Av. Siempre Viva 742');
+    });
+
+    it('si el backend responde 409 (sin stock suficiente), muestra el mensaje en el checkout', async () => {
+      // 5 unidades del Mouse, que solo tiene 2 en stock
+      localStorage.setItem('levelup_cart', JSON.stringify([{ id: 5, nombre: 'Mouse Gamer', precio: 29990, cantidad: 5 }]));
+      abrirEn('/checkout');
+      llenarCheckout('ana@gmail.com');
+      fireEvent.click(screen.getByRole('button', { name: /pagar ahora/i }));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        "Stock insuficiente para 'Mouse Gamer 16000 DPI Sensor Óptico': disponible 2, solicitado 5"
+      );
+      expect(rutaActual()).toBe('/checkout');
+      expect(screen.getByRole('button', { name: /pagar ahora/i })).toBeEnabled();
+      expect(screen.getByRole('link', { name: /carrito/i })).toHaveTextContent('Carrito $149.950');
     });
 
     it('la vista de pago con error avisa si no hay un pago pendiente', () => {
@@ -361,19 +419,26 @@ describe('Pruebas de las vistas de la tienda', () => {
   describe('Perfil, Contacto y Blog', () => {
     it('el perfil del cliente muestra sus puntos, código de referido e historial (RF5)', async () => {
       simularSesion(PEDRO);
-      // El historial todavía es local (data/ordenes.js) hasta la tarea F3; Pedro en el backend es el id 3
-      const orden = crearOrden({
-        estado: 'pagada', usuarioId: PEDRO.id, cliente: { nombre: 'Pedro' },
-        items: [{ id: 3, nombre: 'Catan El Juego', precio: 27990, cantidad: 1 }],
-        subtotal: 27990, descuento: 5598, total: 22392,
-      });
       abrirEn('/perfil');
 
       // Datos que responde GET /auth/perfil
       expect(await screen.findByText(/100 pts/)).toBeInTheDocument();
       expect(screen.getByText('LVLPEDRO')).toBeInTheDocument();
       expect(screen.getByText('20% Descuento Duoc')).toBeInTheDocument();
-      expect(screen.getByText(`#${orden.numeroOrden}`)).toBeInTheDocument();
+      // Historial de GET /boletas/mis-compras: solo la boleta de Pedro (la otra es de un visitante)
+      expect(await screen.findByText('#20261112-001')).toBeInTheDocument();
+      expect(screen.queryByText('#20261112-002')).not.toBeInTheDocument();
+      expect(screen.getByText('Catan El Juego (x1), Audífonos Gamer 7.1 Surround (x2)')).toBeInTheDocument();
+      expect(screen.getByText('1 pedido(s)')).toBeInTheDocument();
+    });
+
+    it('si el historial falla, el perfil se sigue mostrando con el error en esa tarjeta', async () => {
+      simularSesion(PEDRO);
+      vi.mocked(misCompras).mockRejectedValueOnce(new Error('No se pudo conectar con el servidor.'));
+      abrirEn('/perfil');
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo conectar con el servidor.');
+      expect(screen.getByText('LVLPEDRO')).toBeInTheDocument();
     });
 
     it('sin sesión, el perfil redirige a /login', () => {

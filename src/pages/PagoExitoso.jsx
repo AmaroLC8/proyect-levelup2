@@ -1,12 +1,13 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { obtenerUltimaOrden } from '../data/ordenes';
+import { obtenerUltimaBoleta } from '../utils/ultimaBoleta';
 import ResumenOrden from '../components/ResumenOrden';
 
+// Muestra la boleta que respondió el backend en POST /boletas (la guarda Checkout.jsx)
 export default function PagoExitoso() {
-  const orden = obtenerUltimaOrden();
+  const orden = obtenerUltimaBoleta();
 
-  if (!orden || orden.estado !== 'pagada') {
+  if (!orden || orden.estado !== 'PAGADA') {
     return (
       <div className="container my-5 text-center">
         <h3 className="text-secondary">No hay una compra reciente para mostrar.</h3>

@@ -1,12 +1,43 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { obtenerOrdenPorId } from '../../data/ordenes';
+import { obtenerBoleta } from '../../services/boletasService';
 import ResumenOrden from '../../components/ResumenOrden';
 import EstadoOrden from '../../components/EstadoOrden';
+import EstadoCarga from '../../components/EstadoCarga';
 
+// Lee el id de la URL y dibuja la boleta con key={id}: si cambia el id, React crea el componente
+// de nuevo (vuelve a "Cargando...") en vez de mostrar la boleta anterior (igual que DetalleProducto).
 export default function VerBoletaAdmin() {
   const { id } = useParams();
-  const orden = obtenerOrdenPorId(id);
+  return <BoletaDelPanel key={id} id={id} />;
+}
+
+// Detalle de una boleta para ADMIN y VENDEDOR (GET /boletas/{id})
+function BoletaDelPanel({ id }) {
+  const [orden, setOrden] = useState(null);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    obtenerBoleta(id)
+      .then((datos) => setOrden(datos))
+      .catch((err) => {
+        // Un 404 se muestra como "Orden no encontrada" (más abajo); otro error, en la alerta
+        if (err.status !== 404) setError(err.message);
+      })
+      .finally(() => setCargando(false));
+  }, [id]);
+
+  if (cargando || error) {
+    return (
+      <div className="container py-3">
+        <EstadoCarga cargando={cargando} error={error} />
+        <Link to="/admin/ordenes" className="btn btn-outline-secondary btn-sm">
+          <i className="bi bi-arrow-left me-1"></i>Volver al listado
+        </Link>
+      </div>
+    );
+  }
 
   if (!orden) {
     return (
@@ -37,6 +68,10 @@ export default function VerBoletaAdmin() {
           <div>
             <h3 className="fw-bold text-info mb-0">LEVEL-UP GAMER</h3>
             <p className="small text-secondary mb-0">Comprobante de compra</p>
+            {/* usuario es null cuando compró un visitante (sin cuenta) */}
+            <p className="small text-secondary mb-0">
+              {orden.usuario ? `Cliente registrado: ${orden.usuario.correo}` : 'Compra como visitante'}
+            </p>
           </div>
           <div className="text-end">
             <span className="badge bg-info text-dark fs-6 mb-2">BOLETA ELECTRÓNICA</span>
@@ -50,7 +85,7 @@ export default function VerBoletaAdmin() {
 
         <ResumenOrden
           orden={orden}
-          etiquetaTotal={orden.estado === 'pagada' ? 'Total pagado' : 'Monto no pagado'}
+          etiquetaTotal={orden.estado === 'PAGADA' ? 'Total pagado' : 'Monto no pagado'}
         />
       </div>
     </div>

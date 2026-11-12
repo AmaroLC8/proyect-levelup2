@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { obtenerPerfil, actualizarPerfil } from '../services/authService';
-import { obtenerOrdenesPorUsuario, ordenarPorFechaDesc } from '../data/ordenes';
+import { misCompras } from '../services/boletasService';
 import { formatearDinero, formatearFecha } from '../utils/formato';
 import { validarNombreCompleto } from '../utils/validaciones';
 import EstadoOrden from '../components/EstadoOrden';
@@ -9,7 +9,7 @@ import EstadoCarga from '../components/EstadoCarga';
 
 // Perfil del cliente (RF5). Sin sesión no se llega aquí: RutaProtegida (App.jsx) redirige a /login.
 export default function Perfil() {
-  const { usuario, actualizarUsuarioSesion } = useAuth();
+  const { actualizarUsuarioSesion } = useAuth();
   const [perfil, setPerfil] = useState(null); // datos de GET /auth/perfil
   const [cargando, setCargando] = useState(true);
   const [errorCarga, setErrorCarga] = useState('');
@@ -26,8 +26,19 @@ export default function Perfil() {
       .finally(() => setCargando(false));
   }, []);
 
-  // El historial de compras todavía sale de data/ordenes.js (se conecta al backend en la tarea F3)
-  const compras = ordenarPorFechaDesc(obtenerOrdenesPorUsuario(usuario.id));
+  // Historial de compras: GET /boletas/mis-compras (las boletas del usuario del token,
+  // de la más reciente a la más antigua). Tiene su propia carga y error, así un problema
+  // con el historial no impide ver los datos del perfil.
+  const [compras, setCompras] = useState([]);
+  const [cargandoCompras, setCargandoCompras] = useState(true);
+  const [errorCompras, setErrorCompras] = useState('');
+
+  useEffect(() => {
+    misCompras()
+      .then((datos) => setCompras(datos))
+      .catch((err) => setErrorCompras(err.message))
+      .finally(() => setCargandoCompras(false));
+  }, []);
 
   const handleEditar = () => {
     setForm({ nombre: perfil.nombre, apellidos: perfil.apellidos });
@@ -144,7 +155,8 @@ export default function Perfil() {
               <div>
                 <span className="text-secondary small fw-bold">COMPRAS REALIZADAS</span>
                 <h3 className="fw-bold text-info mb-0 mt-1">
-                  {compras.filter((o) => o.estado === 'pagada').length} pedido(s)
+                  {/* Solo cuentan las boletas pagadas (el backend también guarda las rechazadas) */}
+                  {compras.filter((o) => o.estado === 'PAGADA').length} pedido(s)
                 </h3>
               </div>
               <div className="bg-info bg-opacity-10 text-info p-3 rounded-circle fs-3">
@@ -248,7 +260,10 @@ export default function Perfil() {
               <i className="bi bi-clock-history me-2"></i>Mis Compras Recientes
             </h5>
 
-            {compras.length === 0 ? (
+            <EstadoCarga cargando={cargandoCompras} error={errorCompras} />
+
+            {/* La tabla se muestra cuando el historial ya cargó sin errores */}
+            {!cargandoCompras && !errorCompras && (compras.length === 0 ? (
               <div className="text-center py-4 text-secondary">
                 <i className="bi bi-cart-x fs-1 d-block mb-2"></i>
                 Aún no has realizado ninguna compra en la tienda.
@@ -271,7 +286,8 @@ export default function Perfil() {
                         <td className="fw-bold text-info">#{ord.numeroOrden}</td>
                         <td className="small">{formatearFecha(ord.fecha)}</td>
                         <td className="small">
-                          {ord.items.map((i) => `${i.nombre} (x${i.cantidad})`).join(', ')}
+                          {/* Cada detalle de la boleta trae el producto completo */}
+                          {ord.detalles.map((d) => `${d.producto?.nombre} (x${d.cantidad})`).join(', ')}
                         </td>
                         <td><EstadoOrden estado={ord.estado} /></td>
                         <td className="text-end fw-bold text-success">
@@ -282,7 +298,7 @@ export default function Perfil() {
                   </tbody>
                 </table>
               </div>
-            )}
+            ))}
           </div>
         </div>
       </div>

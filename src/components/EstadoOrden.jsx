@@ -1,6 +1,11 @@
 import React from 'react';
 
+// PAGADA y RECHAZADA son los estados que envía el backend (enum EstadoBoleta).
+// "pagada" y "rechazada" (minúsculas) son de las órdenes locales de data/ordenes.js,
+// que todavía usan el Dashboard y AdminUsuarios (se eliminan en la tarea F4).
 const ESTADOS = {
+  PAGADA: { texto: 'Pagada', clase: 'bg-success' },
+  RECHAZADA: { texto: 'Rechazada', clase: 'bg-danger' },
   pagada: { texto: 'Pagada', clase: 'bg-success' },
   rechazada: { texto: 'Rechazada', clase: 'bg-danger' },
 };
